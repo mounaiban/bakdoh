@@ -17,6 +17,7 @@ Bakdoh Infohoardi Text Database Access Module
 # limitations under the License.
 
 import io
+from i import bfind
 
 def index_dup(seq, pos=0):
     """
@@ -148,28 +149,16 @@ class RecOffsetIndex:
         smallest to largest.
 
         """
-        starts = offs[self.rec_start_chr]
-        n = len(starts)
-        i_start = 0
-        i_end = n - 1
-        if off < starts[i_start]:
-            return None
-        if off > starts[i_end]:
-            return n
-        v = None
-        while i_end - i_start > 1:
-            i = i_start + (i_end-i_start) // 2
-            v = starts[i]
-            if off == v:
-                return i
-            elif off < v:
-                i_end = i
-            else:
-                i_start = i
-        if off < starts[i_end]:
-            return i_start
+        ileft, iright = bfind(offs[self.rec_start_chr], off)
+        if ileft >= 0:
+            return ileft
         else:
-            return i_end
+            if iright == 0:
+                return None
+            else:
+                # TODO: Be more in line with slices and bisect by
+                # returning an index for use with insert()
+                return iright-1
 
     def _do_get_mark_offs(self, s, chrs, pos=0, endpos=None, n=None):
         """
