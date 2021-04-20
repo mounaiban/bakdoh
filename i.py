@@ -16,6 +16,8 @@ Indexing Helper Classes and Functions Module
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from bisect import bisect_left, bisect_right
+
 LEFT = -1
 RIGHT = 1
 
@@ -108,7 +110,10 @@ def bfind(s, k, cfunc=cfunc_default):
     cfunc(k, e) == 1 when k > e
 
     """
-    return _do_bfind(s, k, 0, cfunc)
+    i = bisect_left(s, k)
+    j = bisect_right(s, k)
+    return (i, j)
+    # return _do_bfind(s, k, 0, cfunc)
 
 def _do_bfind(s, k, gs0, cfunc):
     """
