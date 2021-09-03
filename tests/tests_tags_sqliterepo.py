@@ -344,7 +344,7 @@ class SLRPutRelTests(TestCase):
         Put duplicate relations (not allowed)
 
         Duplicate relations are repeated relations between the same
-        anchors in the same direction.
+        anchors with the same name in the same direction.
 
         """
         testrep = SQLiteRepo()
@@ -383,4 +383,122 @@ class SLRPutRelTests(TestCase):
         term = reltxt('Raa', 'a', 'a')
         r = [x for x in cus.execute(sc_ck, (term,))]
         self.assertEqual(r[0][0], 0)
+
+class SLRIncrAQTests(TestCase):
+    
+    def test_incr_a_q_exact(self):
+        """Increment assigned quantity by exact anchor name"""
+        testrep = SQLiteRepo()
+        sc_in = "INSERT INTO {} VALUES(?, ?)".format(testrep.table_a)
+        cus = testrep._slr_get_cursor()
+        data = [('a', 1), ('z', 100)]
+        cus.executemany(sc_in, data)
+        #
+        testrep.incr_a_q('a', 1)
+        expected = [('a', 2), ('z', 100)]
+        ##
+        sc_ck = "SELECT * FROM {}".format(
+            testrep.table_a, testrep.col
+        )
+        r = [x for x in cus.execute(sc_ck)]
+        self.assertEqual(r, expected)
+
+    def test_incr_a_q_exact_neg_d(self):
+        """Decrement assigned quantity by exact anchor name (when d<0)"""
+        testrep = SQLiteRepo()
+        sc_in = "INSERT INTO {} VALUES(?, ?)".format(testrep.table_a)
+        cus = testrep._slr_get_cursor()
+        data = [('a', 1), ('z', 100)]
+        cus.executemany(sc_in, data)
+        #
+        testrep.incr_a_q('a', -1)
+        expected = [('a', 0), ('z', 100)]
+        ##
+        sc_ck = "SELECT * FROM {}".format(
+            testrep.table_a, testrep.col
+        )
+        r = [x for x in cus.execute(sc_ck)]
+        self.assertEqual(r, expected)
+
+class SLRSetAQTests(TestCase):
+    
+    def test_set_a_q_exact(self):
+        """Assign quantity to an anchor by exact name"""
+        testrep = SQLiteRepo()
+        sc_in = "INSERT INTO {} VALUES(?, ?)".format(testrep.table_a)
+        cus = testrep._slr_get_cursor()
+        data = (('a', None), ('z', None))
+        cus.executemany(sc_in, data)
+        #
+        q_expected = 1
+        testrep.set_a_q('a', q_expected)
+        ##
+        sc_ck = "SELECT * FROM {} WHERE {} = ?".format(
+            testrep.table_a, testrep.col
+        )
+        r = [x for x in cus.execute(sc_ck, ('a'))]
+        self.assertEqual(r[0], ('a', q_expected))
+
+class SLRIncrRelQTests(TestCase):
+    
+    def test_incr_rel_q_exact(self):
+        """Increment quantity assigned to relation by exact name and anchors"""
+        testrep = SQLiteRepo()
+        sc_in = "INSERT INTO {} VALUES(?, ?)".format(testrep.table_a)
+        cus = testrep._slr_get_cursor()
+        rel_a_z_0 = reltxt('Raz0', 'a', 'z')
+        rel_a_z_1 = reltxt('Raz1', 'a', 'z')
+        data = (('a', 100), ('z', 100), (rel_a_z_0, 1), (rel_a_z_1, 100))
+            # two anchors and a relation between them
+        cus.executemany(sc_in, data)
+        #
+        testrep.incr_rel_q('Raz0', 'a', 'z', 1)
+        ##
+        sc_ck = "SELECT * FROM {}".format(testrep.table_a)
+        expected = [('a', 100), ('z', 100), (rel_a_z_0, 2), (rel_a_z_1, 100)]
+        r = [x for x in cus.execute(sc_ck)]
+        self.assertEqual(r, expected)
+
+    def test_incr_rel_q_exact_neg_d(self):
+        """
+        Decrement quantity assigned to relation by exact name and anchors
+        (where d<0)
+
+        """
+        testrep = SQLiteRepo()
+        sc_in = "INSERT INTO {} VALUES(?, ?)".format(testrep.table_a)
+        cus = testrep._slr_get_cursor()
+        rel_a_z_0 = reltxt('Raz0', 'a', 'z')
+        rel_a_z_1 = reltxt('Raz1', 'a', 'z')
+        data = (('a', 100), ('z', 100), (rel_a_z_0, 1), (rel_a_z_1, 100))
+            # two anchors and a relation between them
+        cus.executemany(sc_in, data)
+        #
+        testrep.incr_rel_q('Raz0', 'a', 'z', -1)
+        ##
+        sc_ck = "SELECT * FROM {}".format(testrep.table_a)
+        expected = [('a', 100), ('z', 100), (rel_a_z_0, 0), (rel_a_z_1, 100)]
+        r = [x for x in cus.execute(sc_ck)]
+        self.assertEqual(r, expected)
+
+class SLRSetRelQTests(TestCase):
+
+    def test_set_rel_q_exact(self):
+        """Assign quantity to relation by exact name and anchors"""
+        testrep = SQLiteRepo()
+        sc_in = "INSERT INTO {} VALUES(?, ?)".format(testrep.table_a)
+        cus = testrep._slr_get_cursor()
+        rel_a_z = reltxt('Raz', 'a', 'z')
+        data = (('a', None), ('z', None), (rel_a_z, None))
+            # two anchors and a relation between them
+        cus.executemany(sc_in, data)
+        #
+        q_expected = 1
+        testrep.set_rel_q('Raz', 'a', 'z', q_expected)
+        ##
+        sc_ck = "SELECT * FROM {} WHERE {} = ?".format(
+            testrep.table_a, testrep.col
+        )
+        r = [x for x in cus.execute(sc_ck, (rel_a_z,))]
+        self.assertEqual(r[0], (rel_a_z, q_expected))
 

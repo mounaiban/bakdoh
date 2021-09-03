@@ -127,6 +127,15 @@ class SQLiteRepo:
             if 'no such table' in x.args[0]:
                 self._slr_create_tables()
 
+    def _ck_q_isnum(self, **kwargs):
+        argnames = ('q', 'd')
+        for a in argnames:
+            try:
+                if type(kwargs[a]) not in (int, float):
+                    raise TypeError('argument {a} must be a number')
+            except KeyError:
+                pass
+
     def _slr_ck_anchors_exist(self, **kwargs):
         """
         Check if anchors exist, before creating relations
@@ -183,6 +192,23 @@ class SQLiteRepo:
         cs = self._slr_get_cursor()
         cs.execute(sc)
 
+    def _slr_set_q(self, ae, q):
+        # TODO: also works with relations, as relations are special anchors
+        sc_up = "UPDATE {} SET {} = ? WHERE {} LIKE ?".format(
+            self.table_a, self.col_q, self.col
+        )
+        cus = self._slr_get_cursor()
+        cus.execute(sc_up, (q, ae))
+        self._db_conn.commit()
+
+    def _slr_incr_q(self, ae, d):
+        sc_incr = "UPDATE {0} SET {1} = {1}+? WHERE {2} LIKE ?".format(
+            self.table_a, self.col_q, self.col
+        )
+        cus = self._slr_get_cursor()
+        cus.execute(sc_incr, (d, ae))
+        self._db_conn.commit()
+
     def _slr_get_cursor(self):
         if not self._db_cus:
             self._db_cus = self._db_conn.cursor()
@@ -199,7 +225,7 @@ class SQLiteRepo:
         """
         if q is not None:
             if type(q) not in (int, float):
-                raise TypeError('q must be numerical')
+                raise TypeError('q must be a number')
         sc = 'INSERT INTO {} VALUES(?, ?)'.format(self.table_a)
         cs = self._slr_get_cursor()
         cs.execute(sc, (item, q))
@@ -230,11 +256,26 @@ class SQLiteRepo:
         self._slr_insert_into_a(d, q)
 
     def set_a_q(self, a, q):
-        raise NotImplementedError("TODO: set anchor q value")
+        """
+        Assign a numerical quantity q to an anchor a.
+
+        """
+        self._ck_q_isnum(q=q)
+        ae = a.translate(self.uescs_g)
+        self._slr_set_q(ae, q)
 
     def incr_a_q(self, a, d):
-        raise NotImplementedError("TODO: increment anchor q value")
-        # TODO: use negative values for d to perform decrements
+        """
+        Increment or decrement a quantity assigned to anchor a by
+        d. When d<0, the quantity is decreased.
+
+        If no value has been assigned to the anchor, this method has
+        no effect.
+
+        """
+        self._ck_q_isnum(d=d)
+        ae = a.translate(self.uescs_g)
+        self._slr_incr_q(ae, d)
 
     def delete_a(self, a):
         """
@@ -265,21 +306,52 @@ class SQLiteRepo:
         a2e = a2.translate(self.uescs)
         namee = name.translate(self.uescs)
         for f in ck_fns:
-            f(a1e=a1e, a2e=a2e, namee=namee)
+            f(namee=namee, a1e=a1e, a2e=a2e)
         rtxt = reltxt(namee, a1e, a2e)
-        sc_in = 'INSERT INTO {} VALUES(?, ?)'.format(self.table_a)
         try:
             self._slr_insert_into_a(rtxt, q)
         except sqlite3.IntegrityError as x:
             if 'UNIQUE constraint failed' in x.args[0]:
                 raise ValueError('relation already exists')
 
-    def set_rel_q(self, a1, a2, q):
-        raise NotImplementedError("TODO: set quantity value of relation")
+    def set_rel_q(self, name, a_from, a_to, q):
+        """
+        Assign a numerical quantity q to a relation between anchors
+        a_from and a_to.
 
-    def incr_rel_q(self, a, d):
-        raise NotImplementedError("TODO: increment anchor q value")
-        # TODO: use negative values for d to perform decrements
+        """
+        ck_fns = (
+            self._slr_ck_anchors_exist,
+            self._ck_q_isnum,
+        )
+        ae_from = a_from.translate(self.uescs_g)
+        ae_to = a_to.translate(self.uescs_g)
+        namee = name.translate(self.uescs_g)
+        for f in ck_fns:
+            f(namee=namee, a1e=ae_from, a2e=ae_to, q=q)
+        term = reltxt(name, ae_from, ae_to)
+        self._slr_set_q(term, q)
+
+    def incr_rel_q(self, name, a_from, a_to, d):
+        """
+        Increment or decrement a quantity assigned to a relation between
+        a_from and a_to by d. When d<0, the quantity is decreased.
+
+        If no value has been assigned to the relation, this method has
+        no effect.
+
+        """
+        ck_fns = (
+            self._slr_ck_anchors_exist,
+            self._ck_q_isnum,
+        )
+        ae_from = a_from.translate(self.uescs_g)
+        ae_to = a_to.translate(self.uescs_g)
+        namee = name.translate(self.uescs_g)
+        for f in ck_fns:
+            f(namee=namee, a1e=ae_from, a2e=ae_to, d=d)
+        term = reltxt(name, ae_from, ae_to)
+        self._slr_incr_q(term, d)
 
     def delete_rels(self, **kwargs):
         """
