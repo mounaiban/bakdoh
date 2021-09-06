@@ -47,13 +47,61 @@ def direct_select_all(repo, term='%'):
     rows = cus.execute(sc_ck, (term,))
     return [x for x in rows]
 
+class SLRDeleteATests(TestCase):
+    """Tests for delete_a()"""
+
+    def test_delete_a_exact(self):
+        """Delete anchor by exact name"""
+        testrep = SQLiteRepo()
+        data = [('a', None), ('n', None), ('z', None)]
+        direct_insert(testrep, data)
+        ##
+        testrep.delete_a('n')
+        expected = [('a', None), ('z', None)]
+        samp = direct_select_all(testrep)
+        self.assertEqual(samp, expected)
+
+    def test_delete_a_wildcard_prefix(self):
+        """
+        Delete anchor with prefix wildcard
+
+        Relations must be left intact
+
+        """
+        testrep = SQLiteRepo()
+        data = [
+            ('a0', None),
+            ('a1', None),
+            ('n', None),
+            ('z', None),
+            (reltxt('aRnz', 'n', 'z'), None),
+        ]
+        direct_insert(testrep, data)
+        ##
+        testrep.delete_a('a*')
+        expected = [('n', None), ('z', None), (reltxt('aRnz', 'n', 'z'), None)]
+        samp = direct_select_all(testrep)
+        self.assertEqual(samp, expected)
+
 class SLRGetATests(TestCase):
     """Tests for get_a()"""
 
     def test_get_a_exact(self):
-        """Get anchor by exact name"""
+        """
+        Get anchor by exact name
+
+        Relations must not be returned
+
+        """
         testrep = SQLiteRepo()
-        data = (('a', None), ('n', None), ('z', None))
+        data = (
+            ('a', None),
+            ('n', None),
+            ('z', None),
+            (reltxt('aRan', 'a', 'n'), None),
+            (reltxt('nRna', 'n', 'a'), None),
+            (reltxt('zRzn', 'z', 'n'), None),
+        )
         direct_insert(testrep, data)
         ##
         expected_a = [('a', None),]
@@ -170,6 +218,55 @@ class SLRPutATests(TestCase):
             ae = "".join((ae, r"\u{:04x}".format(ord(x))))
         expected = [(ae, 1)]
         samp = [x for x in rows]
+        self.assertEqual(samp, expected)
+
+class SLRDeleteRelsTests(TestCase):
+    """Tests for delete_rels()"""
+
+    def test_delete_rels_exact_afrom(self):
+        """Delete relations with exact name"""
+        testrep = SQLiteRepo()
+        data = [('a', None), ('z', None), (reltxt('Raz', 'a', 'z'), None)]
+        direct_insert(testrep, data)
+        ##
+        testrep.delete_rels(a_from='a')
+        ##
+        expected = [('a', None), ('z', None)]
+        samp = direct_select_all(testrep)
+        self.assertEqual(samp, expected)
+
+    def test_delete_rels_exact_afrom_namesake(self):
+        """
+        Delete relations by exact destination anchor name (namesakes exist)
+
+        Unrelated relations with same name as must be left intact
+
+        """
+        testrep = SQLiteRepo()
+        data = [
+            ('a', None),
+            ('z', None),
+            ('Raz', None),
+            (reltxt('Raz', 'a', 'z'), None)
+        ]
+        direct_insert(testrep, data)
+        ##
+        testrep.delete_rels(a_from='a')
+        ##
+        expected = [('a', None), ('z', None), ('Raz', None)]
+        samp = direct_select_all(testrep)
+        self.assertEqual(samp, expected)
+
+    def test_delete_rels_exact_ato(self):
+        """Delete relations by exact destination anchor name"""
+        testrep = SQLiteRepo()
+        data = [('a', None), ('z', None), (reltxt('Raz', 'a', 'z'), None)]
+        direct_insert(testrep, data)
+        ##
+        testrep.delete_rels(a_to='z')
+        ##
+        expected = [('a', None), ('z', None)]
+        samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
 class SLRGetRelsTests(TestCase):

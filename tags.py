@@ -136,6 +136,16 @@ class SQLiteRepo:
             except KeyError:
                 pass
 
+    def _test_get_symbols(self):
+        # TODO: get a sample of all reserved symbols in a string separated
+        # by spaces
+        # TODO: for unit tests only (idea to put test functions in classes
+        # outside of unit tests inspired by YTdownloader)
+        out = ""
+        for x in SYMBOLS.values():
+            out = "".join((out, "{} ".format(x)))
+        return out[:-1]
+
     def _slr_ck_anchors_exist(self, **kwargs):
         """
         Check if anchors exist, before creating relations
@@ -287,7 +297,9 @@ class SQLiteRepo:
 
         """
         d = a.translate(self.uescs_g)
-        sc = 'DELETE FROM {} WHERE {} = ?'.format(self.table_a, self.col)
+        sc = """
+            DELETE FROM {0} WHERE {1} NOT LIKE '%{2}%' AND {1} LIKE ?
+        """.format(self.table_a, self.col, SYMBOLS['REL_START'])
         cs = self._slr_get_cursor()
         cs.execute(sc, (d,))
         self._db_conn.commit()
@@ -392,17 +404,23 @@ class SQLiteRepo:
         a_from = kwargs.get('a_from')
         if a_to is None and a_from is None:
             raise ValueError("at least one of a_to or a_from is required")
-        ae_to = a_to.translate(self.uescs_g)
-        ae_from = a_from.translate(self.uescs_g)
+        if a_from is None:
+            ae_from = '%'
+        else:
+            ae_from = a_from.translate(self.uescs_g)
+        if a_to is None:
+            ae_to = '%'
+        else:
+            ae_to = a_to.translate(self.uescs_g)
         name = kwargs.get('name')
         if name is None:
             namee = '%'
         else:
             namee = name.translate(self.uescs_g)
-        sc = 'DELETE FROM {} WHERE {} = ?'.format(self.table_a, self.col)
+        sc = 'DELETE FROM {} WHERE {} LIKE ?'.format(self.table_a, self.col)
         cs = self._slr_get_cursor()
-        reltxt = reltxt(name, ae_to, ae_from)
-        cs.execute(sc, (reltxt,))
+        term = reltxt(namee, ae_from, ae_to)
+        cs.execute(sc, (term,))
         self._db_conn.commit()
 
     def get_rels(self, **kwargs):
