@@ -30,7 +30,7 @@ SYMBOLS = {
 
 # NOTE: Escape sequences are used for the sake of precision,
 # based on the awareness that multiple forms of the symbols
-# in use in different locales and languages.
+# are in use in different locales and languages.
 
 def uesc_dict(d):
     """
@@ -72,6 +72,7 @@ class SQLiteRepo:
     Repository to manage a TAGS database in storage, using SQLite 3
 
     """
+    num_q_args = ('q', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
     table_a = "a"
     col = "item"
     col_q = "q"
@@ -127,9 +128,8 @@ class SQLiteRepo:
             if 'no such table' in x.args[0]:
                 self._slr_create_tables()
 
-    def _ck_q_isnum(self, **kwargs):
-        argnames = ('q', 'd')
-        for a in argnames:
+    def _ck_q_isnum(self, ck_args=('q','d'), **kwargs):
+        for a in ck_args:
             try:
                 if type(kwargs[a]) not in (int, float):
                     raise TypeError('argument {a} must be a number')
@@ -137,10 +137,14 @@ class SQLiteRepo:
                 pass
 
     def _test_get_symbols(self):
-        # TODO: get a sample of all reserved symbols in a string separated
-        # by spaces
-        # TODO: for unit tests only (idea to put test functions in classes
-        # outside of unit tests inspired by YTdownloader)
+        """
+        Return a sample of all reserved symbols in a string,
+        separated by spaces. This method is intended for use
+        by unit tests.
+
+        """
+        # The idea to put test functions in classes was inspired
+        # by yt-dlp
         out = ""
         for x in SYMBOLS.values():
             out = "".join((out, "{} ".format(x)))
@@ -203,7 +207,7 @@ class SQLiteRepo:
         cs.execute(sc)
 
     def _slr_set_q(self, ae, q):
-        # TODO: also works with relations, as relations are special anchors
+        # PROTIP: also works with relations; relations are special anchors
         sc_up = "UPDATE {} SET {} = ? WHERE {} LIKE ?".format(
             self.table_a, self.col_q, self.col
         )
@@ -241,7 +245,79 @@ class SQLiteRepo:
         cs.execute(sc, (item, q))
         self._db_conn.commit()
 
-    def get_a(self, a):
+    def _slr_q_clause(self, **kwargs):
+        """
+        Returns an expression string for searching anchors by
+        q values, for use with SQL WHERE clauses.
+
+        Arguments
+        =========
+        * q: Specify exact quantity. Cannot be used with any
+          other argument.
+
+        * q_gt, q_gte: Specify lower bound (greater than x);
+          q_gt=x becomes q > x; q_gte=x becomes q >= x.
+          Both arguments cannot be used together or with q.
+
+        * q_lt, q_lte: Specify upper bound (less than x);
+          q_lt=x becomes q < x; q_lte becomes q <= x.
+          Both arguments cannot be used together or with q.
+
+        * q_not: when set to True, prepare a clause for
+          selecting anchors NOT within the range specified.
+
+        Arguments will be ignored if mutually exclusive
+        arguments are used together. The order of precedence
+        is as follows: q, (q_gt or q_lt), (q_gte or q_lte)
+
+        Note
+        ====
+        If the lower bound is higher than the upper bound,
+        a range exclusion expression will be returned.
+
+        e.g. q_gt=4, q_lt=3 returns "q > 4 OR q < 3",
+        equivalent to "NOT (q > 3 AND q < 4)"
+
+        """
+        lbe = None  # lower bound
+        ub = None  # upper bound
+        lbe_expr = ""
+        ub_expr = ""
+        inter = ""
+        self._ck_q_isnum(ck_args=self.num_q_args, **kwargs)
+        if 'q' in kwargs:
+            lbe = kwargs['q']
+            lbe_expr = "{} = {}".format(self.col_q, lbe)
+        else:
+            # lower bound
+            if 'q_gt' in kwargs:
+                lbe = kwargs['q_gt']
+                lbe_expr = "{} > {}".format(self.col_q, lbe)
+            elif 'q_gte' in kwargs:
+                lbe = kwargs['q_gte']
+                lbe_expr = "{} >= {}".format(self.col_q, lbe)
+            # upper bound
+            if 'q_lt' in kwargs:
+                ub = kwargs['q_lt']
+                ub_expr = "{} < {}".format(self.col_q, ub)
+            elif 'q_lte' in kwargs:
+                ub = kwargs['q_lte']
+                ub_expr = "{} <= {}".format(self.col_q, ub)
+            if lbe is not None and ub is not None:
+                if lbe < ub:
+                    inter = " AND "
+                else:
+                    inter = " OR "
+        if lbe is not None or ub is not None:
+            q_not = kwargs.get('q_not', False)
+            if q_not:
+                return " AND NOT ({}{}{})".format(lbe_expr, inter, ub_expr)
+            else:
+                return " AND {}{}{}".format(lbe_expr, inter, ub_expr)
+        else:
+            return ''
+
+    def get_a(self, a, **kwargs):
         """
         Get an iterator containing anchors matching a. Use '*' as a
         wildcard.
@@ -249,11 +325,13 @@ class SQLiteRepo:
         """
         # TODO: Check applicability of '?' wildcards
         term = a.translate(self.uescs_g)
-        sc = """
-            SELECT {1}, {2} FROM
-            (SELECT {1}, {2} FROM {0} WHERE {1} NOT LIKE '%{3}%')
-            WHERE {1} LIKE ?
+        sc_q_range = ''
+        if kwargs:
+            sc_q_range = self._slr_q_clause(**kwargs)
+        sc_select = """
+            SELECT {1}, {2} FROM {0} WHERE {1} NOT LIKE '%{3}%' AND {1} LIKE ?
         """.format(self.table_a, self.col, self.col_q, SYMBOLS['REL_START'])
+        sc = "{} {}".format(sc_select, sc_q_range)
         cs = self._slr_get_cursor()
         return cs.execute(sc, (term,))
 
@@ -460,11 +538,14 @@ class SQLiteRepo:
                 kwargs[n] = '%'
             else:
                 kwargs[n] = kwargs[n].translate(self.uescs_g)
+        sc_q_range = self._slr_q_clause(**kwargs)
         sc = 'SELECT {1}, {2} FROM {0} WHERE {1} LIKE ?'.format(
             self.table_a,
             self.col,
             self.col_q
         )
+        if sc_q_range:
+            sc = "".join((sc, sc_q_range))
         cs = self._slr_get_cursor()
         term = reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
         return cs.execute(sc, (term,))

@@ -23,7 +23,7 @@ def direct_insert(repo, data):
     """
     Insert anchors directly into an SQLiteRepo
 
-    Argument 'data' contains anchors and corresponding q 
+    Argument 'data' contains anchors and corresponding q
     (quantity) value in a format like: ((anchor_0, q_0),
     (anchor_1, q_1), ...)
 
@@ -46,6 +46,58 @@ def direct_select_all(repo, term='%'):
     cus = repo._slr_get_cursor()
     rows = cus.execute(sc_ck, (term,))
     return [x for x in rows]
+
+class SLR_QClauseTests(TestCase):
+    """Tests for _slr_q_clause()"""
+
+    def test(self):
+        """Generate SQL expression for q range in WHERE clause"""
+        testrep = SQLiteRepo()
+        argtests = (
+            ({}, ''),
+            ({'q':5}, ' AND {} = 5'),
+            ({'q':0}, ' AND {} = 0'),
+            ({'q_gt':1}, ' AND {} > 1'),
+            ({'q_gt':0}, ' AND {} > 0'),
+            ({'q_lt':9}, ' AND {} < 9'),
+            ({'q_lt':0}, ' AND {} < 0'),
+            ({'q_gt':1, 'q_lt':9}, ' AND {0} > 1 AND {0} < 9'),
+            ({'q_gt':0, 'q_lt':0}, ' AND {0} > 0 OR {0} < 0'), # edge case
+            ({'q_gt':1, 'q_lt':9, 'q_lte': 9}, ' AND {0} > 1 AND {0} < 9'),
+            ({'q_gte':1, 'q_lte':9}, ' AND {0} >= 1 AND {0} <= 9'),
+            ({'q_gt':9, 'q_lt':1}, ' AND {0} > 9 OR {0} < 1'),
+            ({'q_gt':9, 'q_gte':9, 'q_lt':1}, ' AND {0} > 9 OR {0} < 1'),
+            ({'q_gte':9, 'q_lte':1}, ' AND {0} >= 9 OR {0} <= 1'),
+            (
+                {'q_gt':9, 'q_gte':9, 'q_lt':1, 'q_lte':1},
+                ' AND {0} > 9 OR {0} < 1'
+            ),
+            (
+                {'q_gt':1, 'q_gte':1, 'q_lt':9, 'q_lte':9},
+                ' AND {0} > 1 AND {0} < 9'
+            ),
+            (
+                {'q':5, 'q_gt':9, 'q_gte':9, 'q_lt':1, 'q_lte':9},
+                ' AND {} = 5'
+            ),
+        ) # format: (kwargs, expected_output)
+          # PROTIP: {0} will be replaced with q-value column name
+        for x in argtests:
+            with self.subTest(args=x[0]):
+                expected = x[1].format(testrep.col_q)
+                self.assertEqual(testrep._slr_q_clause(**x[0]), expected)
+
+    def test_not(self):
+        """Generate SQL expression for q range in WHERE clause (q_not)"""
+        testrep = SQLiteRepo()
+        argtests = (
+            ({'q':5, 'q_not': True}, ' AND NOT ({} = 5)'),
+            ({'q':0, 'q_not': True}, ' AND NOT ({} = 0)'),
+        )
+        for x in argtests:
+            with self.subTest(args=x[0]):
+                expected = x[1].format(testrep.col_q)
+                self.assertEqual(testrep._slr_q_clause(**x[0]), expected)
 
 class SLRDeleteATests(TestCase):
     """Tests for delete_a()"""
@@ -129,6 +181,96 @@ class SLRGetATests(TestCase):
         self.assertEqual(samp_a, expected_a)
         self.assertEqual(samp_n, expected_n)
         self.assertEqual(samp_z, expected_z)
+
+    def test_get_q_eq(self):
+        """Get anchors by exact quantity"""
+        testrep = SQLiteRepo()
+        data = (('a', 1), ('n', 2.5), ('z', 2.5))
+        direct_insert(testrep, data)
+        ##
+        expected_one = [('a', 1)]
+        expected_tpf = [('n', 2.5), ('z', 2.5)]
+        samp_one = [x for x in testrep.get_a('*', q=1)]
+        samp_tpf = [x for x in testrep.get_a('*', q=2.5)]
+        self.assertEqual(samp_one, expected_one)
+        self.assertEqual(samp_tpf, expected_tpf)
+
+    def test_get_q_eq_not(self):
+        """Get anchors by negated exact quantity"""
+        testrep = SQLiteRepo()
+        data = (('a', 1), ('n', 2.5), ('z', 2.5))
+        direct_insert(testrep, data)
+        ##
+        expected_one = [('n', 2.5), ('z', 2.5)]
+        expected_tpf = [('a', 1)]
+        samp_one = [x for x in testrep.get_a('*', q_not=True, q=1)]
+        samp_tpf = [x for x in testrep.get_a('*', q_not=True, q=2.5)]
+        self.assertEqual(samp_one, expected_one)
+        self.assertEqual(samp_tpf, expected_tpf)
+
+    def test_get_q_range(self):
+        """Get anchors by quantity range"""
+        testrep = SQLiteRepo()
+        data = (('a', 0), ('g', 0.2), ('m', 0.4), ('s', 0.6), ('z', None))
+        direct_insert(testrep, data)
+        ##
+        tests = (
+            ({'a': '*', 'q_gt': 0.1}, [('g', 0.2), ('m', 0.4), ('s', 0.6)]),
+            ({'a': '*', 'q_lt': 0.6}, [('a', 0), ('g', 0.2), ('m', 0.4)]),
+            ({'a': '*', 'q_gt': 0.2, 'q_lt': 0.6}, [('m', 0.4)]),
+            (
+                {'a': '*', 'q_gte': 0.2, 'q_lte': 0.6},
+                [('g', 0.2), ('m', 0.4), ('s', 0.6)]
+            ),
+            ({'a': '*', 'q_gt': 0.2, 'q_lt': 0.6}, [('m', 0.4)]),
+            ({'a': '*', 'q_gt': 0.4, 'q_lt': 0.2}, [('a', 0), ('s', 0.6)]),
+        ) # format: (kwargs, expected_result)
+        ##
+        for t in tests:
+            with self.subTest(kwargs=t):
+                samp = [x for x in testrep.get_a(**t[0])]
+                self.assertEqual(samp, t[1])
+
+    def test_get_q_range_not(self):
+        """Get anchors by negated quantity range"""
+        testrep = SQLiteRepo()
+        data = (('a', 0), ('g', 0.2), ('m', 0.4), ('s', 0.6), ('z', None))
+        direct_insert(testrep, data)
+        ##
+        tests = (
+            ({'a': '*', 'q_not': True, 'q_gt': 0.1}, [('a', 0)]),
+            ({'a': '*', 'q_not': True, 'q_lt': 0.4}, [('m', 0.4), ('s', 0.6)]),
+            (
+                {'a': '*', 'q_not': True, 'q_gt': 0.1, 'q_lt': 0.5},
+                [('a', 0), ('s', 0.6)]
+            ),
+            (
+                {'a': '*', 'q_not': True, 'q_gte': 0.2, 'q_lte': 0.6},
+                [('a', 0)]
+            ),
+            (
+                {'a': '*', 'q_not': True, 'q_gt': 0.4, 'q_lt': 0.2},
+                [('g', 0.2), ('m', 0.4)]
+            ),
+        ) # format: (kwargs, expected_result)
+        ##
+        for t in tests:
+            with self.subTest(kwargs=t):
+                samp = [x for x in testrep.get_a(**t[0])]
+                self.assertEqual(samp, t[1])
+
+    def test_get_q_zerovsnone(self):
+        """
+        Get zero quantity anchors excluding anchors without quantity
+
+        """
+        testrep = SQLiteRepo()
+        data = (('a', 0), ('z', None))
+        direct_insert(testrep, data)
+        ##
+        expected = [('a', 0)]
+        samp = [x for x in testrep.get_a('*', q=0)]
+        self.assertEqual(samp, expected)
 
     def test_get_a_q_wildcard_infix(self):
         """Get multiple anchors with infix wildcard"""
@@ -444,7 +586,7 @@ class SLRPutRelTests(TestCase):
         self.assertEqual(len(samp), 0)
 
 class SLRIncrAQTests(TestCase):
-    
+
     def test_incr_a_q_exact(self):
         """Increment assigned quantity by exact anchor name"""
         testrep = SQLiteRepo()
@@ -475,7 +617,7 @@ class SLRIncrAQTests(TestCase):
         self.assertEqual(r, expected)
 
 class SLRSetAQTests(TestCase):
-    
+
     def test_set_a_q_exact(self):
         """Assign quantity to an anchor by exact name"""
         testrep = SQLiteRepo()
@@ -489,7 +631,7 @@ class SLRSetAQTests(TestCase):
         self.assertEqual(samp[0], ('a', q_expected))
 
 class SLRIncrRelQTests(TestCase):
-    
+
     def test_incr_rel_q_exact(self):
         """Increment quantity assigned to relation by exact name and anchors"""
         testrep = SQLiteRepo()
