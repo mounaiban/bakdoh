@@ -446,6 +446,76 @@ class SLRGetRelsTests(TestCase):
         samp = [x for x in testrep.get_rels(name='Raz1')]
         expected = [rels[1],]
 
+    def test_get_rels_a_eq_q_range(self):
+        """Get relations by exact anchors and quantity range"""
+        testrep = SQLiteRepo()
+        data = (
+            ('a', None),
+            ('z', None),
+            (reltxt('RazN', 'a', 'z'), None),
+            (reltxt('Raz0', 'a', 'z'), 0),
+            (reltxt('Raz2', 'a', 'z'), 0.2),
+            (reltxt('Raz4', 'a', 'z'), 0.4),
+            (reltxt('Rza6', 'z', 'a'), 0.6),
+            (reltxt('Rza8', 'z', 'a'), 0.8),
+        )
+        direct_insert(testrep, data)
+        ##
+        tests = (
+            (
+                {'a_from': 'a', 'a_to': 'z', 'q_gt': 0.1},
+                [(reltxt('Raz2','a','z'), 0.2), (reltxt('Raz4','a','z'), 0.4)]
+            ),
+            (
+                {'a_from': 'a', 'a_to': 'z', 'q_lt': 0.4},
+                [(reltxt('Raz0','a','z'), 0), (reltxt('Raz2','a','z'), 0.2)]
+            ),
+            (
+                {'a_from': 'z', 'a_to': 'a', 'q_lte': 0.8},
+                [(reltxt('Rza6','z','a'), 0.6), (reltxt('Rza8','z','a'), 0.8)]
+            ),
+        ) # format: (kwargs, expected_result)
+        ##
+        for t in tests:
+            with self.subTest(kwargs=t[0]):
+                samp = [x for x in testrep.get_rels(**t[0])]
+                self.assertEqual(samp, t[1])
+
+    def test_get_rels_a_eq_q_not_range(self):
+        """Get relations by exact anchors and quantity range"""
+        testrep = SQLiteRepo()
+        data = (
+            ('a', None),
+            ('z', None),
+            (reltxt('RazN', 'a', 'z'), None),
+            (reltxt('Raz0', 'a', 'z'), 0),
+            (reltxt('Raz2', 'a', 'z'), 0.2),
+            (reltxt('Raz4', 'a', 'z'), 0.4),
+            (reltxt('Rza6', 'z', 'a'), 0.6),
+            (reltxt('Rza8', 'z', 'a'), 0.8),
+        )
+        direct_insert(testrep, data)
+        ##
+        tests = (
+            (
+                {'a_from': 'a', 'a_to': 'z', 'q_gt': 0.1, 'q_not': True},
+                [(reltxt('Raz0','a','z'), 0)]
+            ),
+            (
+                {'a_from': 'a', 'a_to': 'z', 'q_lt': 0.1, 'q_not': True},
+                [(reltxt('Raz2','a','z'), 0.2), (reltxt('Raz4','a','z'), 0.4)]
+            ),
+            (
+                {'a_from': 'z', 'a_to': 'a', 'q_lte': 0.8, 'q_not': True},
+                []
+            ),
+        ) # format: (kwargs, expected_result)
+        ##
+        for t in tests:
+            with self.subTest(kwargs=t[0]):
+                samp = [x for x in testrep.get_rels(**t[0])]
+                self.assertEqual(samp, t[1])
+
     def test_get_rels_name_wildcard_suffix(self):
         """Get relations by name suffix wildcard (with/without quantity)"""
         testrep = SQLiteRepo()
