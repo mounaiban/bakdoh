@@ -272,6 +272,26 @@ class SLRGetATests(TestCase):
         samp = [x for x in testrep.get_a('*', q=0)]
         self.assertEqual(samp, expected)
 
+    def test_get_a_wildcard_onechar_together(self):
+        """Get multiple anchors with one character wildcard (3 in a row)"""
+        testrep = SQLiteRepo()
+        data = (('abbba', None), ('accca', None), ('adddda', None))
+        direct_insert(testrep, data)
+        ##
+        expected = [('abbba', None), ('accca', None)]
+        samp = [x for x in testrep.get_a('a...a')]
+        self.assertEqual(samp, expected)
+
+    def test_get_a_wildcard_onechar_interlace(self):
+        """Get multiple anchors with one character wildcard (interlaced)"""
+        testrep = SQLiteRepo()
+        data = (('ababa', None), ('aeiou', None), ('azaza', None))
+        direct_insert(testrep, data)
+        ##
+        expected = [('ababa', None), ('azaza', None)]
+        samp = [x for x in testrep.get_a('a.a.a')]
+        self.assertEqual(samp, expected)
+
     def test_get_a_q_wildcard_infix(self):
         """Get multiple anchors with infix wildcard"""
         testrep = SQLiteRepo()

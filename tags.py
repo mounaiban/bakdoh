@@ -20,12 +20,13 @@ import sqlite3
 
 SYMBOLS = {
     "Q": "\u003d",      # Equals sign
-    "QUESTION": "\u003f",
     "PERCENT": "\u0025",
+    "UNDERSCORE": "\u005f",
     "REL_START": "\u003a",  # Colon
     "REL_REF": "\u2192",    # Arrow right symbol
     "TYPEOF": "\u2208",     # Subset of symbol
-    "WILDCARD": "\u002a",   # Asterisk
+    "WILDCARD_ZEROPLUS": "\u002a",   # Asterisk
+    "WILDCARD_ONE": "\u002e",   # Dot
 } # symbols with special meanings cannot be used directly in names of anchors
 
 # NOTE: Escape sequences are used for the sake of precision,
@@ -81,9 +82,9 @@ class SQLiteRepo:
     uescs_g = uescs.copy()
 
     # The uescs_g dict is used for get queries, where percent and
-    # question marks are allowed as wildcards
-    uescs_g[ord(SYMBOLS['WILDCARD'])] = "%"
-    uescs_g.pop(ord(SYMBOLS['QUESTION']))
+    # underscores are allowed as wildcards.
+    uescs_g[ord(SYMBOLS['WILDCARD_ZEROPLUS'])] = "%"
+    uescs_g[ord(SYMBOLS['WILDCARD_ONE'])] = "_"
 
     def __init__(self, db_path=None, mode="rwc"):
         """
@@ -320,10 +321,10 @@ class SQLiteRepo:
     def get_a(self, a, **kwargs):
         """
         Get an iterator containing anchors matching a. Use '*' as a
-        wildcard.
+        wildcard for zero or more characters, or '.' as a wildcard
+        for a single character.
 
         """
-        # TODO: Check applicability of '?' wildcards
         term = a.translate(self.uescs_g)
         sc_q_range = ''
         if kwargs:
