@@ -17,17 +17,28 @@ Bakdoh Totally Approachable Graph System (TAGS) Module
 # limitations under the License.
 
 import sqlite3
+from html import unescape
 
-SYMBOLS = {
-    "Q": "\u003d",      # Equals sign
-    "PERCENT": "\u0025",
-    "UNDERSCORE": "\u005f",
-    "REL_START": "\u003a",  # Colon
-    "REL_REF": "\u2192",    # Arrow right symbol
-    "TYPEOF": "\u2208",     # Subset of symbol
-    "WILDCARD_ZEROPLUS": "\u002a",   # Asterisk
-    "WILDCARD_ONE": "\u002e",   # Dot
-} # symbols with special meanings cannot be used directly in names of anchors
+# Reserved symbols that cannot be used in anchors
+CHARS_R = {
+    "REL_START": "\u21e8",  # Arrow Right
+    "REL_REF": "\u21b7",    # Clockwise Semicircle Arrow Right
+}
+chars_r_list = [s for s in CHARS_R.values()]
+
+# Reserved symbols that cannot be used as the first character
+# of anchors
+CHARS_R_PX = {
+    "A_ID": "\u0040",   # At-Sign
+    "TYPEOF": "\u220a", # Small Element-of Symbol
+}
+chars_r_px_list = [s for s in CHARS_R_PX.values()]
+
+# Reserved symbols used as wildcards in queries
+CHARS_R_WC = {
+    "WILDCARD_ONE": "\u003f",   # Question mark
+    "WILDCARD_ZEROPLUS": "\u002a",  # Asterisk
+}
 
 # NOTE: Escape sequences are used for the sake of precision,
 # based on the awareness that multiple forms of the symbols
@@ -36,7 +47,7 @@ SYMBOLS = {
 def uesc_dict(d):
     """
     Return a translation dict which replaces nominated characters
-    with their Unicode escape sequences.
+    with HTML Entitites (ampersand-code-semicolon escape sequences).
 
     Values of dict d represent nominated characters. Keys from d
     no not affect output.
@@ -44,7 +55,7 @@ def uesc_dict(d):
     """
     out = {}
     for v in d.values():
-        out[ord(v)] = r"\u{:04x}".format(ord(v))
+        out[ord(v)] = r"&#{};".format(ord(v))
     return out
 
 def reltxt(namee, a1e, a2e):
@@ -61,11 +72,7 @@ def reltxt(namee, a1e, a2e):
     # NOTE: The 'e' suffix in the argument names means that
     # the argument is 'expected to be already escaped'
     return '{}{}{}{}{}'.format(
-        namee,
-        SYMBOLS['REL_START'],
-        a1e,
-        SYMBOLS['REL_REF'],
-        a2e,
+        namee, CHARS_R['REL_START'], a1e, CHARS_R['REL_REF'], a2e
     )
 
 class SQLiteRepo:
@@ -73,18 +80,33 @@ class SQLiteRepo:
     Repository to manage a TAGS database in storage, using SQLite 3
 
     """
+    CHARS_R_WC_SLR = {
+        "WILDCARD_ONE": "\u005f",   # Question Mark
+        "WILDCARD_ZEROPLUS": "\u0025", # Percent Sign
+    }
     num_q_args = ('q', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
     table_a = "a"
+    trans_wc = {}  # see wildcard dict preparation code below
+    escape_a = uesc_dict(CHARS_R)
+    escape_px = uesc_dict(CHARS_R_PX)
     col = "item"
     col_q = "q"
     limit = 32
-    uescs = uesc_dict(SYMBOLS)
-    uescs_g = uescs.copy()
+    escape = '\\'
+    _test_sample = {
+        "R": ["{0}X{0}".format(x) for x in CHARS_R.values()],
+        "R_PX": ["{0}X{0}".format(x) for x in CHARS_R_PX.values()],
+        "WC": ["{0}X{0}".format(x) for x in CHARS_R_WC.values()],
+        "WC_SLR": ["{0}X{0}".format(x) for x in CHARS_R_WC_SLR.values()],
+    } # strings containing reserved chars for unit test use
 
-    # The uescs_g dict is used for get queries, where percent and
-    # underscores are allowed as wildcards.
-    uescs_g[ord(SYMBOLS['WILDCARD_ZEROPLUS'])] = "%"
-    uescs_g[ord(SYMBOLS['WILDCARD_ONE'])] = "_"
+    # Prepare wildcard translation dict
+    #  change TAGS wildcards to SQL wildcards
+    for k in CHARS_R_WC.keys():
+        trans_wc[ord(CHARS_R_WC[k])] = CHARS_R_WC_SLR[k]
+    #  escape SQL wildcard characters
+    for v in CHARS_R_WC_SLR.values():
+        trans_wc[ord(v)] = r"{}{}".format(escape, v)
 
     def __init__(self, db_path=None, mode="rwc"):
         """
@@ -137,19 +159,25 @@ class SQLiteRepo:
             except KeyError:
                 pass
 
-    def _test_get_symbols(self):
+    def _prep_term(self, term):
         """
-        Return a sample of all reserved symbols in a string,
-        separated by spaces. This method is intended for use
-        by unit tests.
+        Return an str of a ready-to-use form of a search term.
+        TAGS wildcards are converted to SQL wildcards; HTML Entities
+        used as escape codes are decoded.
+        """
+        return unescape(term.translate(self.trans_wc))
 
+    def _prep_a(self, a):
         """
-        # The idea to put test functions in classes was inspired
-        # by yt-dlp
+        Prepare an anchor for insertion into database, converting
+        reserved characters into escape codes as necessary
+        """
         out = ""
-        for x in SYMBOLS.values():
-            out = "".join((out, "{} ".format(x)))
-        return out[:-1]
+        if a[0] in chars_r_px_list:
+            out = "".join((a[0].translate(self.escape_px), a[1:]))
+        else:
+            out = a
+        return out.translate(self.escape_a)
 
     def _slr_ck_anchors_exist(self, **kwargs):
         """
@@ -158,7 +186,7 @@ class SQLiteRepo:
         Arguments
         =========
         a1e, a2e: anchors, with all special characters in
-        SYMBOLS escaped
+        CHARS_R escaped
 
         """
         sc_ck = 'SELECT COUNT(*) FROM {0} WHERE {1} = ? OR {1} = ?'.format(
@@ -325,24 +353,30 @@ class SQLiteRepo:
         for a single character.
 
         """
-        term = a.translate(self.uescs_g)
         sc_q_range = ''
         if kwargs:
             sc_q_range = self._slr_q_clause(**kwargs)
         sc_select = """
-            SELECT {1}, {2} FROM {0} WHERE {1} NOT LIKE '%{3}%' AND {1} LIKE ?
-        """.format(self.table_a, self.col, self.col_q, SYMBOLS['REL_START'])
+                SELECT {1}, {2} FROM {0}
+                WHERE {1} NOT LIKE '%{3}%' AND {1} LIKE ?
+                ESCAPE '{4}'
+            """.format(
+                self.table_a,
+                self.col,
+                self.col_q,
+                CHARS_R['REL_START'],
+                self.escape
+            )
         sc = "{} {}".format(sc_select, sc_q_range)
         cs = self._slr_get_cursor()
-        return cs.execute(sc, (term,))
+        return cs.execute(sc, (self._prep_term(a),))
 
     def put_a(self, a, q=None):
         """
         Put an anchor a with optional numerical quantity value q.
 
         """
-        d = a.translate(self.uescs)
-        self._slr_insert_into_a(d, q)
+        self._slr_insert_into_a(self._prep_a(a), q)
 
     def set_a_q(self, a, q):
         """
@@ -350,8 +384,7 @@ class SQLiteRepo:
 
         """
         self._ck_q_isnum(q=q)
-        ae = a.translate(self.uescs_g)
-        self._slr_set_q(ae, q)
+        self._slr_set_q(self._prep_a(a), q)
 
     def incr_a_q(self, a, d):
         """
@@ -363,8 +396,7 @@ class SQLiteRepo:
 
         """
         self._ck_q_isnum(d=d)
-        ae = a.translate(self.uescs_g)
-        self._slr_incr_q(ae, d)
+        self._slr_incr_q(self._prep_a(a), d)
 
     def delete_a(self, a):
         """
@@ -372,15 +404,14 @@ class SQLiteRepo:
         anchor, or use the asterisk '*' as a wildcard (with caution).
 
         If the name of the anchor contains an asterisk, use the
-        escape sequence \\u002a instead.
+        escape sequence &ast; instead.
 
         """
-        d = a.translate(self.uescs_g)
         sc = """
             DELETE FROM {0} WHERE {1} NOT LIKE '%{2}%' AND {1} LIKE ?
-        """.format(self.table_a, self.col, SYMBOLS['REL_START'])
+        """.format(self.table_a, self.col, CHARS_R['REL_START'])
         cs = self._slr_get_cursor()
-        cs.execute(sc, (d,))
+        cs.execute(sc, (self._prep_term(a),))
         self._db_conn.commit()
 
     def put_rel(self, name, a1, a2, q=None):
@@ -393,9 +424,9 @@ class SQLiteRepo:
             self._slr_ck_rel_self,
             self._slr_ck_anchors_exist,
         )
-        a1e = a1.translate(self.uescs)
-        a2e = a2.translate(self.uescs)
-        namee = name.translate(self.uescs)
+        a1e = self._prep_a(a1)
+        a2e = self._prep_a(a2)
+        namee = self._prep_a(name)
         for f in ck_fns:
             f(namee=namee, a1e=a1e, a2e=a2e)
         rtxt = reltxt(namee, a1e, a2e)
@@ -415,9 +446,9 @@ class SQLiteRepo:
             self._slr_ck_anchors_exist,
             self._ck_q_isnum,
         )
-        ae_from = a_from.translate(self.uescs_g)
-        ae_to = a_to.translate(self.uescs_g)
-        namee = name.translate(self.uescs_g)
+        ae_from = self._prep_a(a_from)
+        ae_to = self._prep_a(a_to)
+        namee = self._prep_a(name)
         for f in ck_fns:
             f(namee=namee, a1e=ae_from, a2e=ae_to, q=q)
         term = reltxt(name, ae_from, ae_to)
@@ -436,9 +467,9 @@ class SQLiteRepo:
             self._slr_ck_anchors_exist,
             self._ck_q_isnum,
         )
-        ae_from = a_from.translate(self.uescs_g)
-        ae_to = a_to.translate(self.uescs_g)
-        namee = name.translate(self.uescs_g)
+        ae_from = self._prep_a(a_from)
+        ae_to = self._prep_a(a_to)
+        namee = self._prep_a(name)
         for f in ck_fns:
             f(namee=namee, a1e=ae_from, a2e=ae_to, d=d)
         term = reltxt(name, ae_from, ae_to)
@@ -472,8 +503,8 @@ class SQLiteRepo:
         =====
         * At least either a_to or a_from must be specified.
 
-        * If any name or anchor contains an asterisk, use the escape
-          sequence \\u002a instead.
+        * If any name or anchor contains an asterisk, or question mark,
+          use the escape sequence &ast; and &quest; instead.
 
         * Use wildcards with caution, as with any other delete operation
           in any database system.
@@ -486,16 +517,16 @@ class SQLiteRepo:
         if a_from is None:
             ae_from = '%'
         else:
-            ae_from = a_from.translate(self.uescs_g)
+            ae_from = self._prep_term(a_from)
         if a_to is None:
             ae_to = '%'
         else:
-            ae_to = a_to.translate(self.uescs_g)
+            ae_to = self._prep_term(a_to)
         name = kwargs.get('name')
         if name is None:
             namee = '%'
         else:
-            namee = name.translate(self.uescs_g)
+            namee = self._prep_term(name)
         sc = 'DELETE FROM {} WHERE {} LIKE ?'.format(self.table_a, self.col)
         cs = self._slr_get_cursor()
         term = reltxt(namee, ae_from, ae_to)
@@ -529,8 +560,8 @@ class SQLiteRepo:
 
         Note
         ====
-        * If any name or anchor contains an asterisk, use the escape
-          sequence \\u002a instead.
+        * If any name or anchor contains an asterisk or question mark,
+          use the HTML entities '&ast;' and '&quest;' instead.
 
         """
         argnames = ('name', 'a_from', 'a_to')
@@ -538,12 +569,13 @@ class SQLiteRepo:
             if n not in kwargs:
                 kwargs[n] = '%'
             else:
-                kwargs[n] = kwargs[n].translate(self.uescs_g)
+                kwargs[n] = self._prep_term(kwargs[n])
         sc_q_range = self._slr_q_clause(**kwargs)
-        sc = 'SELECT {1}, {2} FROM {0} WHERE {1} LIKE ?'.format(
+        sc = "SELECT {1}, {2} FROM {0} WHERE {1} LIKE ? ESCAPE '{3}'".format(
             self.table_a,
             self.col,
-            self.col_q
+            self.col_q,
+            self.escape
         )
         if sc_q_range:
             sc = "".join((sc, sc_q_range))

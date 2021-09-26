@@ -16,7 +16,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tags import reltxt, SQLiteRepo, SYMBOLS
+from tags import reltxt, SQLiteRepo, CHARS_R
 from unittest import TestCase
 
 def direct_insert(repo, data):
@@ -182,6 +182,30 @@ class SLRGetATests(TestCase):
         self.assertEqual(samp_n, expected_n)
         self.assertEqual(samp_z, expected_z)
 
+    def test_get_a_sql_wildcard_escape(self):
+        """Get anchors containing SQL wildcard characters using wildcards"""
+        testrep = SQLiteRepo()
+        inputs = testrep._test_sample['WC_SLR']
+        for i in inputs:
+            k = i[0]
+            data = [("{}{}".format(i, n), None) for n in range(3)]
+            direct_insert(testrep, data)
+            with self.subTest(char=k):
+                samp = [x for x in testrep.get_a("{}*".format(k))]
+                self.assertEqual(samp, data)
+
+    def test_get_a_wildcard_escape(self):
+        """Get anchors containing wildcard characters using wildcards"""
+        testrep = SQLiteRepo()
+        inputs = testrep._test_sample['WC']
+        for i in inputs:
+            k = i[0]
+            data = [("{}{}".format(i, n), None) for n in range(3)]
+            direct_insert(testrep, data)
+            with self.subTest(char=k):
+                samp = [x for x in testrep.get_a("&#{};*".format(ord(k)))]
+                self.assertEqual(samp, data)
+
     def test_get_q_eq(self):
         """Get anchors by exact quantity"""
         testrep = SQLiteRepo()
@@ -279,7 +303,7 @@ class SLRGetATests(TestCase):
         direct_insert(testrep, data)
         ##
         expected = [('abbba', None), ('accca', None)]
-        samp = [x for x in testrep.get_a('a...a')]
+        samp = [x for x in testrep.get_a('a???a')]
         self.assertEqual(samp, expected)
 
     def test_get_a_wildcard_onechar_interlace(self):
@@ -289,7 +313,7 @@ class SLRGetATests(TestCase):
         direct_insert(testrep, data)
         ##
         expected = [('ababa', None), ('azaza', None)]
-        samp = [x for x in testrep.get_a('a.a.a')]
+        samp = [x for x in testrep.get_a('a?a?a')]
         self.assertEqual(samp, expected)
 
     def test_get_a_q_wildcard_infix(self):
@@ -350,36 +374,43 @@ class SLRPutATests(TestCase):
     def test_put_a_special_chars(self):
         """Put anchor containing special reserved characters"""
         testrep = SQLiteRepo()
-        ta = ""
-        for x in SYMBOLS.values():
-            ta = "".join((ta, x))
+        data = testrep._test_sample["R"]
         #
-        testrep.put_a(ta, None)
+        for d in data:
+            testrep.put_a(d, None)
         ##
-        ae = ""
-        for x in SYMBOLS.values():
-            ae = "".join((ae, r"\u{:04x}".format(ord(x))))
-        expected = [(ae, None)]
+        expected = [(r"&#8680;X&#8680;", None), (r"&#8631;X&#8631;", None)]
         samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
-    def test_put_a_q_special_chars(self):
-        """Put anchor with quantity containing special reserved characters"""
+    def test_put_a_special_chars_prefix(self):
+        """
+        Put anchor containing special prefix characters
+
+        Special prefix characters are allowed to be used as-is in
+        anchors, except for the first character.
+        """
         testrep = SQLiteRepo()
-        ta = ""
-        for x in SYMBOLS.values():
-            ta = "".join((ta, x))
+        data = testrep._test_sample["R_PX"]
         #
-        testrep.put_a(ta, 1)
+        for d in data:
+            testrep.put_a(d, 1)
         ##
-        sc_ck = "SELECT * FROM {}".format(testrep.table_a)
-        cus = testrep._slr_get_cursor()
-        rows = cus.execute(sc_ck)
-        ae = ""
-        for x in SYMBOLS.values():
-            ae = "".join((ae, r"\u{:04x}".format(ord(x))))
-        expected = [(ae, 1)]
-        samp = [x for x in rows]
+        expected = [(r"&#64;X" + "\u0040", 1), (r"&#8714;X" + "\u220a", 1)]
+        samp = direct_select_all(testrep)
+        self.assertEqual(samp, expected)
+
+    def test_put_a_special_chars_wildcards(self):
+        """Put anchor containing wildcard characters"""
+        testrep = SQLiteRepo()
+        data = testrep._test_sample["WC"]
+        data.extend(testrep._test_sample["WC_SLR"])
+        #
+        for d in data:
+            testrep.put_a(d, None)
+        ##
+        expected = [(x, None) for x in data]
+        samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
 class SLRDeleteRelsTests(TestCase):
