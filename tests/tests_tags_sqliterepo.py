@@ -182,6 +182,16 @@ class SLRGetATests(TestCase):
         self.assertEqual(samp_n, expected_n)
         self.assertEqual(samp_z, expected_z)
 
+    def test_get_a_exact_sql_wildcard_escape(self):
+        """Get anchor containing SQL wildcard characters"""
+        testrep = SQLiteRepo()
+        inputs = testrep._test_sample['WC_SLR']
+        for i in inputs:
+            direct_insert(testrep, ((i, None),))
+            with self.subTest(a=i):
+                samp = [x for x in testrep.get_a(i)]
+                self.assertEqual(samp, [(i, None),])
+
     def test_get_a_sql_wildcard_escape(self):
         """Get anchors containing SQL wildcard characters using wildcards"""
         testrep = SQLiteRepo()

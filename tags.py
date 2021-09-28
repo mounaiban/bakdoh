@@ -237,19 +237,17 @@ class SQLiteRepo:
 
     def _slr_set_q(self, ae, q):
         # PROTIP: also works with relations; relations are special anchors
-        sc_up = "UPDATE {} SET {} = ? WHERE {} LIKE ?".format(
-            self.table_a, self.col_q, self.col
-        )
+        sc_up = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
+        sc = "".join((sc_up, self._slr_a_where_clause(rels=True)))
         cus = self._slr_get_cursor()
-        cus.execute(sc_up, (q, ae))
+        cus.execute(sc, (q, ae))
         self._db_conn.commit()
 
     def _slr_incr_q(self, ae, d):
-        sc_incr = "UPDATE {0} SET {1} = {1}+? WHERE {2} LIKE ?".format(
-            self.table_a, self.col_q, self.col
-        )
+        sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.table_a, self.col_q)
+        sc = "".join((sc_incr, self._slr_a_where_clause(rels=True)))
         cus = self._slr_get_cursor()
-        cus.execute(sc_incr, (d, ae))
+        cus.execute(sc, (d, ae))
         self._db_conn.commit()
 
     def _slr_get_cursor(self):
@@ -273,6 +271,21 @@ class SQLiteRepo:
         cs = self._slr_get_cursor()
         cs.execute(sc, (item, q))
         self._db_conn.commit()
+
+    def _slr_a_where_clause(self, rels=False):
+        """
+        Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
+        operations on anchors and relations.
+
+        When rels is True, the clause includes relations.
+        """
+        out = "WHERE {} LIKE ? ESCAPE '{}' ".format(self.col, self.escape)
+        if not rels:
+            excl_rels = "AND {} NOT LIKE '%{}%' ".format(
+                self.col, CHARS_R['REL_START']
+            )
+            out = "".join((out, excl_rels))
+        return out
 
     def _slr_q_clause(self, **kwargs):
         """
@@ -353,22 +366,16 @@ class SQLiteRepo:
         for a single character.
 
         """
-        sc_q_range = ''
+        sc_select = "SELECT {}, {} FROM {} ".format(
+            self.col, self.col_q, self.table_a,
+        )
+        sc = "".join((sc_select, self._slr_a_where_clause()))
         if kwargs:
             sc_q_range = self._slr_q_clause(**kwargs)
-        sc_select = """
-                SELECT {1}, {2} FROM {0}
-                WHERE {1} NOT LIKE '%{3}%' AND {1} LIKE ?
-                ESCAPE '{4}'
-            """.format(
-                self.table_a,
-                self.col,
-                self.col_q,
-                CHARS_R['REL_START'],
-                self.escape
-            )
-        sc = "{} {}".format(sc_select, sc_q_range)
+            sc = "".join((sc, sc_q_range))
         cs = self._slr_get_cursor()
+        # NOTE: all generated statements are expected to have just
+        # a single parameter at this time.
         return cs.execute(sc, (self._prep_term(a),))
 
     def put_a(self, a, q=None):
@@ -407,9 +414,8 @@ class SQLiteRepo:
         escape sequence &ast; instead.
 
         """
-        sc = """
-            DELETE FROM {0} WHERE {1} NOT LIKE '%{2}%' AND {1} LIKE ?
-        """.format(self.table_a, self.col, CHARS_R['REL_START'])
+        sc_delete = "DELETE FROM {} ".format(self.table_a)
+        sc = "".join((sc_delete, self._slr_a_where_clause()))
         cs = self._slr_get_cursor()
         cs.execute(sc, (self._prep_term(a),))
         self._db_conn.commit()
@@ -527,7 +533,8 @@ class SQLiteRepo:
             namee = '%'
         else:
             namee = self._prep_term(name)
-        sc = 'DELETE FROM {} WHERE {} LIKE ?'.format(self.table_a, self.col)
+        sc_delete = "DELETE FROM {} ".format(self.table_a)
+        sc = "".join((sc_delete, self._slr_a_where_clause(rels=True)))
         cs = self._slr_get_cursor()
         term = reltxt(namee, ae_from, ae_to)
         cs.execute(sc, (term,))
@@ -570,16 +577,15 @@ class SQLiteRepo:
                 kwargs[n] = '%'
             else:
                 kwargs[n] = self._prep_term(kwargs[n])
-        sc_q_range = self._slr_q_clause(**kwargs)
-        sc = "SELECT {1}, {2} FROM {0} WHERE {1} LIKE ? ESCAPE '{3}'".format(
-            self.table_a,
-            self.col,
-            self.col_q,
-            self.escape
+        sc_select = "SELECT {}, {} FROM {} ".format(
+            self.col, self.col_q, self.table_a
         )
+        sc = "".join((sc_select, self._slr_a_where_clause(rels=True)))
+        sc_q_range = self._slr_q_clause(**kwargs)
         if sc_q_range:
             sc = "".join((sc, sc_q_range))
         cs = self._slr_get_cursor()
         term = reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
-        return cs.execute(sc, (term,))
+        rows = cs.execute(sc, (term,))
+        return rows
 
