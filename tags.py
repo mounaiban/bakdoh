@@ -20,11 +20,8 @@ import sqlite3
 from html import unescape
 
 # Reserved symbols that cannot be used in anchors
-CHARS_R = {
-    "REL_START": "\u21e8",  # Arrow Right
-    "REL_REF": "\u21b7",    # Clockwise Semicircle Arrow Right
-}
-chars_r_list = [s for s in CHARS_R.values()]
+CHAR_REL = "\u21e8"     # Arrow Right
+CHARS_R = {"REL_START": CHAR_REL}
 
 # Reserved symbols that cannot be used as the first character
 # of anchors
@@ -71,9 +68,7 @@ def reltxt(namee, a1e, a2e):
     """
     # NOTE: The 'e' suffix in the argument names means that
     # the argument is 'expected to be already escaped'
-    return '{}{}{}{}{}'.format(
-        namee, CHARS_R['REL_START'], a1e, CHARS_R['REL_REF'], a2e
-    )
+    return '{}{}{}{}{}'.format(namee, CHAR_REL, a1e, CHAR_REL, a2e)
 
 class SQLiteRepo:
     """
@@ -281,9 +276,7 @@ class SQLiteRepo:
         """
         out = "WHERE {} LIKE ? ESCAPE '{}' ".format(self.col, self.escape)
         if not rels:
-            excl_rels = "AND {} NOT LIKE '%{}%' ".format(
-                self.col, CHARS_R['REL_START']
-            )
+            excl_rels = "AND {} NOT LIKE '%{}%' ".format(self.col, CHAR_REL)
             out = "".join((out, excl_rels))
         return out
 
@@ -373,7 +366,7 @@ class SQLiteRepo:
         if kwargs:
             sc_q_range = self._slr_q_clause(**kwargs)
             sc = "".join((sc, sc_q_range))
-        cs = self._slr_get_cursor()
+        cs = kwargs.get('slq', self._slr_get_cursor())
         # NOTE: all generated statements are expected to have just
         # a single parameter at this time.
         return cs.execute(sc, (self._prep_term(a),))
@@ -543,7 +536,9 @@ class SQLiteRepo:
     def get_rels(self, **kwargs):
         """
         Return an iterator containing relations by name, anchor, or
-        wildcard.
+        wildcard. Each relation is a list of four elements:
+
+        [relation_name, from_anchor, to_anchor, quantity]
 
         Examples
         ========
@@ -587,5 +582,14 @@ class SQLiteRepo:
         cs = self._slr_get_cursor()
         term = reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
         rows = cs.execute(sc, (term,))
-        return rows
+        ans = (r[0].split(CHAR_REL)+[r[1],] for r in rows)
+        cs2 = self._db_conn.cursor() # needed to resolve anchor from name
+        return(
+            (
+                k[0],
+                next(self.get_a(k[1], slq=cs2)),
+                next(self.get_a(k[2], slq=cs2)),
+                k[3]
+            ) for k in ans
+        )
 
