@@ -16,7 +16,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tags import reltxt, SQLiteRepo, CHARS_R
+from tags import SQLiteRepo, CHARS_R
 from unittest import TestCase
 
 def direct_insert(repo, data):
@@ -126,12 +126,12 @@ class SLRDeleteATests(TestCase):
             ('a1', None),
             ('n', None),
             ('z', None),
-            (reltxt('aRnz', 'n', 'z'), None),
+            (testrep.reltxt('aRnz', 'n', 'z'), None),
         ]
         direct_insert(testrep, data)
         ##
         testrep.delete_a('a*')
-        expected = [('n', None), ('z', None), (reltxt('aRnz', 'n', 'z'), None)]
+        expected = [('n', None), ('z', None), (testrep.reltxt('aRnz', 'n', 'z'), None)]
         samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
@@ -150,9 +150,9 @@ class SLRGetATests(TestCase):
             ('a', None),
             ('n', None),
             ('z', None),
-            (reltxt('aRan', 'a', 'n'), None),
-            (reltxt('nRna', 'n', 'a'), None),
-            (reltxt('zRzn', 'z', 'n'), None),
+            (testrep.reltxt('aRan', 'a', 'n'), None),
+            (testrep.reltxt('nRna', 'n', 'a'), None),
+            (testrep.reltxt('zRzn', 'z', 'n'), None),
         )
         direct_insert(testrep, data)
         ##
@@ -429,7 +429,7 @@ class SLRDeleteRelsTests(TestCase):
     def test_delete_rels_exact_afrom(self):
         """Delete relations with exact name"""
         testrep = SQLiteRepo()
-        data = [('a', None), ('z', None), (reltxt('Raz', 'a', 'z'), None)]
+        data = [('a', None), ('z', None), (testrep.reltxt('Raz', 'a', 'z'), None)]
         direct_insert(testrep, data)
         ##
         testrep.delete_rels(a_from='a')
@@ -450,7 +450,7 @@ class SLRDeleteRelsTests(TestCase):
             ('a', None),
             ('z', None),
             ('Raz', None),
-            (reltxt('Raz', 'a', 'z'), None)
+            (testrep.reltxt('Raz', 'a', 'z'), None)
         ]
         direct_insert(testrep, data)
         ##
@@ -463,7 +463,7 @@ class SLRDeleteRelsTests(TestCase):
     def test_delete_rels_exact_ato(self):
         """Delete relations by exact destination anchor name"""
         testrep = SQLiteRepo()
-        data = [('a', None), ('z', None), (reltxt('Raz', 'a', 'z'), None)]
+        data = [('a', None), ('z', None), (testrep.reltxt('Raz', 'a', 'z'), None)]
         direct_insert(testrep, data)
         ##
         testrep.delete_rels(a_to='z')
@@ -482,7 +482,7 @@ class SLRGetRelsTests(TestCase):
         az = ('z', None)
         anchors = (aa, az)
         rels = [('Raz0', aa, az, None), ('Raz1', aa, az, None)]
-        rels_sql = [(reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
+        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
         direct_insert(testrep, anchors)
         direct_insert(testrep, rels_sql)
         ##
@@ -497,7 +497,7 @@ class SLRGetRelsTests(TestCase):
         az = ('z', None)
         anchors = (aa, az)
         rels = [('Raz0', aa, az, None), ('Raz1', aa, az, None)]
-        rels_sql = [(reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
+        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
         direct_insert(testrep, anchors)
         direct_insert(testrep, rels_sql)
         ##
@@ -515,12 +515,12 @@ class SLRGetRelsTests(TestCase):
         data = (
             aa,
             az,
-            (reltxt('RazN', 'a', 'z'), None),
-            (reltxt('Raz0', 'a', 'z'), 0),
-            (reltxt('Raz2', 'a', 'z'), 0.2),
-            (reltxt('Raz4', 'a', 'z'), 0.4),
-            (reltxt('Rza6', 'z', 'a'), 0.6),
-            (reltxt('Rza8', 'z', 'a'), 0.8),
+            (testrep.reltxt('RazN', 'a', 'z'), None),
+            (testrep.reltxt('Raz0', 'a', 'z'), 0),
+            (testrep.reltxt('Raz2', 'a', 'z'), 0.2),
+            (testrep.reltxt('Raz4', 'a', 'z'), 0.4),
+            (testrep.reltxt('Rza6', 'z', 'a'), 0.6),
+            (testrep.reltxt('Rza8', 'z', 'a'), 0.8),
         )
         direct_insert(testrep, data)
         ##
@@ -552,12 +552,12 @@ class SLRGetRelsTests(TestCase):
         data = (
             aa,
             az,
-            (reltxt('RazN', 'a', 'z'), None),
-            (reltxt('Raz0', 'a', 'z'), 0),
-            (reltxt('Raz2', 'a', 'z'), 0.2),
-            (reltxt('Raz4', 'a', 'z'), 0.4),
-            (reltxt('Rza6', 'z', 'a'), 0.6),
-            (reltxt('Rza8', 'z', 'a'), 0.8),
+            (testrep.reltxt('RazN', 'a', 'z'), None),
+            (testrep.reltxt('Raz0', 'a', 'z'), 0),
+            (testrep.reltxt('Raz2', 'a', 'z'), 0.2),
+            (testrep.reltxt('Raz4', 'a', 'z'), 0.4),
+            (testrep.reltxt('Rza6', 'z', 'a'), 0.6),
+            (testrep.reltxt('Rza8', 'z', 'a'), 0.8),
         )
         direct_insert(testrep, data)
         ##
@@ -593,7 +593,7 @@ class SLRGetRelsTests(TestCase):
             ('Raz1', aa, az, 11),
             ('Rna2', an, aa, 22),
         )
-        rels_sql = [(reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
+        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
         direct_insert(testrep, anchors)
         direct_insert(testrep, rels_sql)
         ##
@@ -614,7 +614,7 @@ class SLRGetRelsTests(TestCase):
             ('Rza12', z, a1, 22),
             ('Ra1a03', a1, a0, 33),
         )
-        rels_sql = [(reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
+        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
         direct_insert(testrep, anchors)
         direct_insert(testrep, rels_sql)
         ##
@@ -635,7 +635,7 @@ class SLRGetRelsTests(TestCase):
             ('Rza02', z, a0, 22),
             ('Rza13', z, a1, 33),
         )
-        rels_sql = [(reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
+        rels_sql = [(testrep.reltxt(n, f[0], t[0]), q) for n, f, t, q in rels]
         direct_insert(testrep, anchors)
         direct_insert(testrep, rels_sql)
         ##
@@ -654,7 +654,7 @@ class SLRPutRelTests(TestCase):
         #
         testrep.put_rel('Raz', 'a', 'z')
         ##
-        term = reltxt('Raz', 'a', 'z')
+        term = testrep.reltxt('Raz', 'a', 'z')
         samp = direct_select_all(testrep, term)
         self.assertEqual(len(samp), 1)
 
@@ -668,7 +668,7 @@ class SLRPutRelTests(TestCase):
         testrep.put_rel('Raz1', 'a', 'z')
         testrep.put_rel('Raz2', 'a', 'z')
         ##
-        term = reltxt('Raz%', 'a', 'z')
+        term = testrep.reltxt('Raz%', 'a', 'z')
         samp = direct_select_all(testrep, term=term)
         self.assertEqual(len(samp), 3)
 
@@ -680,7 +680,7 @@ class SLRPutRelTests(TestCase):
         #
         testrep.put_rel('Raz', 'a', 'z', 3.142)
         ##
-        term = reltxt('Raz', 'a', 'z')
+        term = testrep.reltxt('Raz', 'a', 'z')
         samp = direct_select_all(testrep, term)
         expected = (term, 3.142)
         self.assertEqual(samp[0], expected)
@@ -694,7 +694,7 @@ class SLRPutRelTests(TestCase):
         with self.assertRaises(TypeError):
             testrep.put_rel('Raz', 'a', 'z', ':(')
         ##
-        term = reltxt('Raz', 'a', 'z')
+        term = testrep.reltxt('Raz', 'a', 'z')
         samp = direct_select_all(testrep, term)
         self.assertEqual(len(samp), 0)
 
@@ -715,7 +715,7 @@ class SLRPutRelTests(TestCase):
         with self.assertRaises(ValueError):
             testrep.put_rel('Raz', 'a', 'z')
         ##
-        term = reltxt('Raz', 'a', 'z')
+        term = testrep.reltxt('Raz', 'a', 'z')
         samp = direct_select_all(testrep, term)
         self.assertEqual(len(samp), 1)
 
@@ -728,7 +728,7 @@ class SLRPutRelTests(TestCase):
         with self.assertRaises(ValueError):
             testrep.put_rel('Raa', 'a', 'a')
         ##
-        term = reltxt('Raa', 'a', 'a')
+        term = testrep.reltxt('Raa', 'a', 'a')
         samp = direct_select_all(testrep, term)
         self.assertEqual(len(samp), 0)
 
@@ -782,8 +782,8 @@ class SLRIncrRelQTests(TestCase):
     def test_incr_rel_q_exact(self):
         """Increment quantity assigned to relation by exact name and anchors"""
         testrep = SQLiteRepo()
-        rel_a_z_0 = reltxt('Raz0', 'a', 'z')
-        rel_a_z_1 = reltxt('Raz1', 'a', 'z')
+        rel_a_z_0 = testrep.reltxt('Raz0', 'a', 'z')
+        rel_a_z_1 = testrep.reltxt('Raz1', 'a', 'z')
         data = (('a', 100), ('z', 100), (rel_a_z_0, 1), (rel_a_z_1, 100))
             # two anchors and a relation between them
         direct_insert(testrep, data)
@@ -801,8 +801,8 @@ class SLRIncrRelQTests(TestCase):
 
         """
         testrep = SQLiteRepo()
-        rel_a_z_0 = reltxt('Raz0', 'a', 'z')
-        rel_a_z_1 = reltxt('Raz1', 'a', 'z')
+        rel_a_z_0 = testrep.reltxt('Raz0', 'a', 'z')
+        rel_a_z_1 = testrep.reltxt('Raz1', 'a', 'z')
         data = (('a', 100), ('z', 100), (rel_a_z_0, 1), (rel_a_z_1, 100))
             # two anchors and a relation between them
         direct_insert(testrep, data)
@@ -818,7 +818,7 @@ class SLRSetRelQTests(TestCase):
     def test_set_rel_q_exact(self):
         """Assign quantity to relation by exact name and anchors"""
         testrep = SQLiteRepo()
-        rel_a_z = reltxt('Raz', 'a', 'z')
+        rel_a_z = testrep.reltxt('Raz', 'a', 'z')
         data = (('a', None), ('z', None), (rel_a_z, None))
             # two anchors and a relation between them
         direct_insert(testrep, data)

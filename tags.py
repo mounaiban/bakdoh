@@ -55,20 +55,6 @@ def uesc_dict(d):
         out[ord(v)] = r"&#{};".format(ord(v))
     return out
 
-def reltxt(namee, a1e, a2e):
-    """
-    Return a string representing a relation with name namee between
-    anchor a1e and a2e. This function is also used for building
-    search terms containing wildcards.
-
-    Note that special symbols are not escaped: malformed relations
-    are not suppressed. Please escape these symbols before using
-    this function.
-
-    """
-    # NOTE: The 'e' suffix in the argument names means that
-    # the argument is 'expected to be already escaped'
-    return '{}{}{}{}{}'.format(namee, CHAR_REL, a1e, CHAR_REL, a2e)
 
 class SQLiteRepo:
     """
@@ -157,10 +143,13 @@ class SQLiteRepo:
     def _prep_term(self, term):
         """
         Return an str of a ready-to-use form of a search term.
-        TAGS wildcards are converted to SQL wildcards; HTML Entities
-        used as escape codes are decoded.
+        TAGS wildcards are converted to SQL wildcards, HTML Entities
+        used as escape codes are decoded, local aliases are converted
+        to integer ROWIDs.
+
         """
-        return unescape(term.translate(self.trans_wc))
+        if term.startswith(CHARS_R_PX['A_ID']): return int(term[1:])
+        else: return unescape(term.translate(self.trans_wc))
 
     def _prep_a(self, a):
         """
@@ -180,18 +169,30 @@ class SQLiteRepo:
 
         Arguments
         =========
-        a1e, a2e: anchors, with all special characters in
-        CHARS_R escaped
+        a1e, a2e: anchors, with all special characters escaped
+        or anchor aliases, like @n, where n is the anchor's ROWID
+        in the SQLite backend.
 
         """
-        sc_ck = 'SELECT COUNT(*) FROM {0} WHERE {1} = ? OR {1} = ?'.format(
+        anchors = (kwargs['a1e'], kwargs['a2e'])
+        sc_ck_alias = "SELECT COUNT(*) FROM {} WHERE ROWID = ?".format(
+            self.table_a
+        )
+        sc_ck = "SELECT COUNT(*) FROM {} WHERE {} = ?".format(
             self.table_a, self.col
         )
-        cs = self._slr_get_cursor()
-        r = [x for x in cs.execute(sc_ck, (kwargs['a1e'], kwargs['a2e'],))]
-        rows = r[0][0]
-        if rows != 2:
-            raise ValueError('both anchors must exist')
+        for a in anchors:
+            term = None
+            if a.startswith(CHARS_R_PX['A_ID']):
+                sc = sc_ck_alias
+                term = int(a[1:])
+            else:
+                sc = sc_ck
+                term = a
+            cs = self._slr_get_cursor()
+            r = next(cs.execute(sc, (term,)))
+            if r[0] <= 0:
+                raise ValueError('both anchors must exist')
 
     def _slr_ck_rel_self(self, **kwargs):
         """
@@ -250,6 +251,14 @@ class SQLiteRepo:
             self._db_cus = self._db_conn.cursor()
         return self._db_cus
 
+    def _slr_get_rowids(self, a, **kwargs):
+        """Returns SQLite ROWIDs for anchors matching a"""
+        sc_rowid = "SELECT ROWID, {} from {} ".format(self.col, self.table_a)
+        sc = "".join((sc_rowid, self._slr_a_where_clause(),))
+        term = self._prep_term(a)
+        cs = kwargs.get('cursor', self._slr_get_cursor())
+        return cs.execute(sc, (term,))
+
     def _slr_insert_into_a(self, item, q):
         """
         Inserts an item into the anchor table. This method is intended
@@ -267,14 +276,22 @@ class SQLiteRepo:
         cs.execute(sc, (item, q))
         self._db_conn.commit()
 
-    def _slr_a_where_clause(self, rels=False):
+    def _slr_a_where_clause(self, rels=False, alias=False):
         """
         Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
         operations on anchors and relations.
 
         When rels is True, the clause includes relations.
+
+        When alias is True, the clause selects anchors by SQLite
+        ROWID
+
         """
-        out = "WHERE {} LIKE ? ESCAPE '{}' ".format(self.col, self.escape)
+        out = ""
+        if alias:
+            out = "WHERE ROWID = ? "
+        else:
+            out = "WHERE {} LIKE ? ESCAPE '{}' ".format(self.col, self.escape)
         if not rels:
             excl_rels = "AND {} NOT LIKE '%{}%' ".format(self.col, CHAR_REL)
             out = "".join((out, excl_rels))
@@ -352,21 +369,57 @@ class SQLiteRepo:
         else:
             return ''
 
+    def reltxt(self, namee, a1e, a2e, alias=None):
+        """
+        Return a string representing a relation with name namee between
+        anchor a1e and a2e. This function is also used for building
+        search terms containing wildcards.
+
+        Note that special symbols are not escaped: malformed relations
+        are not suppressed. Please escape these symbols before using
+        this function.
+
+        When alias is set to 'local', local aliased relations are
+        created instead. On SQLite repositories, this means anchors
+        are referenced by a short code like @n, where n is the anchor's
+        SQLite ROWID. Aliased relations are space-efficient, and are
+        practically required for longer anchors, but not searchable.
+
+        """
+        # NOTE: The 'e' suffix in the argument names means that
+        # the argument is 'expected to be already escaped'
+        af = None
+        at = None
+        if alias == 'local':
+            a1rid = next(self._slr_get_rowids(a1e))[0]
+            a2rid = next(self._slr_get_rowids(a2e))[0]
+            af = "{}{}".format(CHARS_R_PX['A_ID'], a1rid)
+            at = "{}{}".format(CHARS_R_PX['A_ID'], a1rid)
+        else:
+            af = a1e
+            at = a2e
+        return '{}{}{}{}{}'.format(namee, CHAR_REL, af, CHAR_REL, at)
+
     def get_a(self, a, **kwargs):
         """
         Get an iterator containing anchors matching a. Use '*' as a
         wildcard for zero or more characters, or '.' as a wildcard
         for a single character.
 
+        Alternate cursors may be specified using the cursor keyword
+        argument. This is used internally by get_rels() in order
+        to resolve relations to anchors.
+
         """
         sc_select = "SELECT {}, {} FROM {} ".format(
             self.col, self.col_q, self.table_a,
         )
-        sc = "".join((sc_select, self._slr_a_where_clause()))
+        is_alias = a.startswith(CHARS_R_PX['A_ID'])
+        sc = "".join((sc_select, self._slr_a_where_clause(alias=is_alias)))
         if kwargs:
             sc_q_range = self._slr_q_clause(**kwargs)
             sc = "".join((sc, sc_q_range))
-        cs = kwargs.get('slq', self._slr_get_cursor())
+        cs = kwargs.get('cursor', self._slr_get_cursor())
         # NOTE: all generated statements are expected to have just
         # a single parameter at this time.
         return cs.execute(sc, (self._prep_term(a),))
@@ -413,22 +466,34 @@ class SQLiteRepo:
         cs.execute(sc, (self._prep_term(a),))
         self._db_conn.commit()
 
-    def put_rel(self, name, a1, a2, q=None):
+    def put_rel(self, name, a1, a2, q=None, **kwargs):
         """
         Create a relation between anchors a1 and a2, with an
         optional numerical quantity value q.
+
+        Use the keyword argument prep_a=False to skip anchor
+        name preprocessing, usually in order to create aliased
+        relations.
 
         """
         ck_fns = (
             self._slr_ck_rel_self,
             self._slr_ck_anchors_exist,
         )
-        a1e = self._prep_a(a1)
-        a2e = self._prep_a(a2)
-        namee = self._prep_a(name)
+        a1e = None
+        a2e = None
+        namee = None
+        if kwargs.get('prep_a', True):
+            a1e = self._prep_a(a1)
+            a2e = self._prep_a(a2)
+            namee = self._prep_a(name)
+        else:
+            a1e = a1
+            a2e = a2
+            namee = name
         for f in ck_fns:
             f(namee=namee, a1e=a1e, a2e=a2e)
-        rtxt = reltxt(namee, a1e, a2e)
+        rtxt = self.reltxt(namee, a1e, a2e, alias=kwargs.get('alias'))
         try:
             self._slr_insert_into_a(rtxt, q)
         except sqlite3.IntegrityError as x:
@@ -450,7 +515,7 @@ class SQLiteRepo:
         namee = self._prep_a(name)
         for f in ck_fns:
             f(namee=namee, a1e=ae_from, a2e=ae_to, q=q)
-        term = reltxt(name, ae_from, ae_to)
+        term = self.reltxt(name, ae_from, ae_to)
         self._slr_set_q(term, q)
 
     def incr_rel_q(self, name, a_from, a_to, d):
@@ -471,7 +536,7 @@ class SQLiteRepo:
         namee = self._prep_a(name)
         for f in ck_fns:
             f(namee=namee, a1e=ae_from, a2e=ae_to, d=d)
-        term = reltxt(name, ae_from, ae_to)
+        term = self.reltxt(name, ae_from, ae_to)
         self._slr_incr_q(term, d)
 
     def delete_rels(self, **kwargs):
@@ -529,7 +594,7 @@ class SQLiteRepo:
         sc_delete = "DELETE FROM {} ".format(self.table_a)
         sc = "".join((sc_delete, self._slr_a_where_clause(rels=True)))
         cs = self._slr_get_cursor()
-        term = reltxt(namee, ae_from, ae_to)
+        term = self.reltxt(namee, ae_from, ae_to)
         cs.execute(sc, (term,))
         self._db_conn.commit()
 
@@ -566,6 +631,8 @@ class SQLiteRepo:
           use the HTML entities '&ast;' and '&quest;' instead.
 
         """
+        # TODO: Also return aliased relations in results even when
+        # anchor names are used
         argnames = ('name', 'a_from', 'a_to')
         for n in argnames:
             if n not in kwargs:
@@ -580,15 +647,15 @@ class SQLiteRepo:
         if sc_q_range:
             sc = "".join((sc, sc_q_range))
         cs = self._slr_get_cursor()
-        term = reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
+        term = self.reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
         rows = cs.execute(sc, (term,))
         ans = (r[0].split(CHAR_REL)+[r[1],] for r in rows)
         cs2 = self._db_conn.cursor() # needed to resolve anchor from name
         return(
             (
                 k[0],
-                next(self.get_a(k[1], slq=cs2)),
-                next(self.get_a(k[2], slq=cs2)),
+                next(self.get_a(k[1], cursor=cs2)),
+                next(self.get_a(k[2], cursor=cs2)),
                 k[3]
             ) for k in ans
         )
