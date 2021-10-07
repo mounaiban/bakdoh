@@ -234,17 +234,37 @@ class SQLiteRepo:
     def _slr_set_q(self, ae, q):
         # PROTIP: also works with relations; relations are special anchors
         sc_up = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
-        sc = "".join((sc_up, self._slr_a_where_clause(rels=True)))
+        sc = "".join((sc_up, self._slr_a_where_clause(is_rel=True)))
         cus = self._slr_get_cursor()
         cus.execute(sc, (q, ae))
         self._db_conn.commit()
 
     def _slr_incr_q(self, ae, d):
         sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.table_a, self.col_q)
-        sc = "".join((sc_incr, self._slr_a_where_clause(rels=True)))
+        sc = "".join((sc_incr, self._slr_a_where_clause(is_rel=True)))
         cus = self._slr_get_cursor()
         cus.execute(sc, (d, ae))
         self._db_conn.commit()
+
+    def _slr_get_a(self, ae, **kwargs):
+        # Supported kwargs: cursor, is_alias, is_rel, q, (q_gt or q_gte),
+        # (q_lt or q_lte), q_not
+        sc_select = "SELECT {}, {} FROM {} ".format(
+            self.col, self.col_q, self.table_a,
+        )
+        is_alias = ae.startswith(CHARS_R_PX['A_ID'])
+        sc_where = self._slr_a_where_clause(
+            is_rel=kwargs.get('is_rel', False),
+            is_alias=kwargs.get('is_alias', False)
+        )
+        sc = "".join((sc_select, sc_where))
+        # NOTE: all generated statements are expected to have just
+        # a single parameter at this time.
+        if kwargs:
+            sc_q_range = self._slr_q_clause(**kwargs)
+            sc = "".join((sc, sc_q_range))
+        cs = kwargs.get('cursor', self._slr_get_cursor())
+        return cs.execute(sc, (ae,))
 
     def _slr_get_cursor(self):
         if not self._db_cus:
@@ -276,25 +296,28 @@ class SQLiteRepo:
         cs.execute(sc, (item, q))
         self._db_conn.commit()
 
-    def _slr_a_where_clause(self, rels=False, alias=False):
+    def _slr_a_where_clause(self, is_rel=False, is_alias=False):
         """
         Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
         operations on anchors and relations.
 
-        When rels is True, the clause includes relations.
+        When is_rel is True, the clause includes relations.
 
-        When alias is True, the clause selects anchors by SQLite
+        When is_alias is True, the clause selects anchors by SQLite
         ROWID
 
         """
-        out = ""
-        if alias:
-            out = "WHERE ROWID = ? "
+        out = "WHERE "
+        if is_alias:
+            out = "".join((out, "ROWID = ? "))
         else:
-            out = "WHERE {} LIKE ? ESCAPE '{}' ".format(self.col, self.escape)
-        if not rels:
-            excl_rels = "AND {} NOT LIKE '%{}%' ".format(self.col, CHAR_REL)
-            out = "".join((out, excl_rels))
+            out = "".join(
+                (out, "{} LIKE ? ESCAPE '{}' ".format(self.col, self.escape))
+            )
+        if not is_rel:
+            out = "".join(
+                (out, "AND {} NOT LIKE '%{}%' ".format(self.col, CHAR_REL))
+            )
         return out
 
     def _slr_q_clause(self, **kwargs):
@@ -434,18 +457,10 @@ class SQLiteRepo:
         to resolve relations to anchors.
 
         """
-        sc_select = "SELECT {}, {} FROM {} ".format(
-            self.col, self.col_q, self.table_a,
-        )
         is_alias = a.startswith(CHARS_R_PX['A_ID'])
-        sc = "".join((sc_select, self._slr_a_where_clause(alias=is_alias)))
-        if kwargs:
-            sc_q_range = self._slr_q_clause(**kwargs)
-            sc = "".join((sc, sc_q_range))
-        cs = kwargs.get('cursor', self._slr_get_cursor())
-        # NOTE: all generated statements are expected to have just
-        # a single parameter at this time.
-        return cs.execute(sc, (self._prep_term(a),))
+        return self._slr_get_a(
+            self._prep_term(a), is_alias=is_alias, is_rel=False, **kwargs
+        )
 
     def put_a(self, a, q=None):
         """
@@ -615,7 +630,7 @@ class SQLiteRepo:
         else:
             namee = self._prep_term(name)
         sc_delete = "DELETE FROM {} ".format(self.table_a)
-        sc = "".join((sc_delete, self._slr_a_where_clause(rels=True)))
+        sc = "".join((sc_delete, self._slr_a_where_clause(is_rel=True)))
         cs = self._slr_get_cursor()
         term = self.reltxt(namee, ae_from, ae_to)
         cs.execute(sc, (term,))
@@ -656,23 +671,15 @@ class SQLiteRepo:
         """
         # TODO: Also return aliased relations in results even when
         # anchor names are used
-        argnames = ('name', 'a_from', 'a_to')
-        for n in argnames:
+        nameargs = ('name', 'a_from', 'a_to')
+        for n in nameargs:
             if n not in kwargs:
                 kwargs[n] = '%'
             else:
                 kwargs[n] = self._prep_term(kwargs[n])
-        sc_select = "SELECT {}, {} FROM {} ".format(
-            self.col, self.col_q, self.table_a
-        )
-        sc = "".join((sc_select, self._slr_a_where_clause(rels=True)))
-        sc_q_range = self._slr_q_clause(**kwargs)
-        if sc_q_range:
-            sc = "".join((sc, sc_q_range))
-        cs = self._slr_get_cursor()
         term = self.reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
-        rows = cs.execute(sc, (term,))
-        ans = (r[0].split(CHAR_REL)+[r[1],] for r in rows)
+        relsrows = self._slr_get_a(term, is_rel=True, **kwargs)
+        anchs = (r[0].split(CHAR_REL)+[r[1],] for r in relsrows)
         cs2 = self._db_conn.cursor() # needed to resolve anchor from name
         return(
             (
@@ -680,6 +687,6 @@ class SQLiteRepo:
                 next(self.get_a(k[1], cursor=cs2)),
                 next(self.get_a(k[2], cursor=cs2)),
                 k[3]
-            ) for k in ans
+            ) for k in anchs
         )
 
