@@ -369,35 +369,58 @@ class SQLiteRepo:
         else:
             return ''
 
-    def reltxt(self, namee, a1e, a2e, alias=None):
+    def reltxt(self, namee, a1e, a2e, alias=None, alias_fmt=3):
         """
-        Return a string representing a relation with name namee between
-        anchor a1e and a2e. This function is also used for building
+        Return a string representing a relation with name namee from
+        anchor a1e to a2e. This function is also used for building
         search terms containing wildcards.
 
         Note that special symbols are not escaped: malformed relations
         are not suppressed. Please escape these symbols before using
         this function.
 
-        When alias is set to 'local', local aliased relations are
-        created instead. On SQLite repositories, this means anchors
-        are referenced by a short code like @n, where n is the anchor's
-        SQLite ROWID. Aliased relations are space-efficient, and are
-        practically required for longer anchors, but not searchable.
+        Keyword Arguments
+        =================
+        * alias - when set to 'local', local aliased relations are
+                  created instead. On SQLite repositories, anchors
+                  are referenced by a short code like @n, where n is
+                  the anchor's SQLite ROWID.
+
+        * alias_fmt - set to the following int values to create
+                      partial or fully aliased relations:
+
+                      1: use alias for a2e only
+
+                      2: use alias for a1e only
+
+                      3: use alias for both anchors
+
+                      Results for undocumented values are
+                      undocumented.
+
+        Note
+        ====
+        Aliased relations are space-efficient, and are practically
+        required for longer anchors, but not searchable.
 
         """
         # NOTE: The 'e' suffix in the argument names means that
         # the argument is 'expected to be already escaped'
-        af = None
-        at = None
+        #
+        af = a1e
+        at = a2e
         if alias == 'local':
-            a1rid = next(self._slr_get_rowids(a1e))[0]
-            a2rid = next(self._slr_get_rowids(a2e))[0]
-            af = "{}{}".format(CHARS_R_PX['A_ID'], a1rid)
-            at = "{}{}".format(CHARS_R_PX['A_ID'], a1rid)
-        else:
-            af = a1e
-            at = a2e
+            try:
+                rid1 = next(self._slr_get_rowids(a1e))[0]
+                rid2 = next(self._slr_get_rowids(a2e))[0]
+            except StopIteration:
+                # TODO: need a clearer error message
+                raise ValueError('both anchors must have ROWIDs')
+            if rid1 and rid2:
+                if alias_fmt & 1:
+                    at = "{}{}".format(CHARS_R_PX['A_ID'], rid2)
+                if alias_fmt & 2:
+                    af = "{}{}".format(CHARS_R_PX['A_ID'], rid1)
         return '{}{}{}{}{}'.format(namee, CHAR_REL, af, CHAR_REL, at)
 
     def get_a(self, a, **kwargs):

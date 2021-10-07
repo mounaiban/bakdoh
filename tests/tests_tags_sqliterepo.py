@@ -16,7 +16,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tags import SQLiteRepo, CHARS_R
+from tags import SQLiteRepo, CHAR_REL, CHARS_R_PX
 from unittest import TestCase
 
 def direct_insert(repo, data):
@@ -46,6 +46,71 @@ def direct_select_all(repo, term='%'):
     cus = repo._slr_get_cursor()
     rows = cus.execute(sc_ck, (term,))
     return [x for x in rows]
+
+class SLR_ReltextTests(TestCase):
+    """Tests for reltext()"""
+
+    def test_reltext_not_exist(self):
+        testrep = SQLiteRepo()
+        data = [('a', None), ('z', None)]
+        direct_insert(testrep, data)
+        with self.assertRaises(ValueError):
+            testrep.reltxt(namee='Rnull', a1e='x', a2e='y', alias='local')
+
+    def test_reltext(self):
+        testrep = SQLiteRepo()
+        data = [('a', None), ('z', None)]
+        direct_insert(testrep, data)
+        argtests = (
+            (
+                {
+                    'namee': 'Raz',
+                    'a1e': 'a',
+                    'a2e': 'z',
+                    'alias': 'local',
+                    'alias_fmt': 0
+                },
+                'Raz{0}a{0}z'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+            ),
+            (
+                {
+                    'namee': 'Raz',
+                    'a1e': 'a',
+                    'a2e': 'z',
+                    'alias': 'local',
+                    'alias_fmt': 1
+                },
+                'Raz{0}a{0}{1}2'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+            ),
+            (
+                {
+                    'namee': 'Raz',
+                    'a1e': 'a',
+                    'a2e': 'z',
+                    'alias': 'local',
+                    'alias_fmt': 2
+                },
+                'Raz{0}{1}1{0}z'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+            ),
+            (
+                {
+                    'namee': 'Raz',
+                    'a1e': 'a',
+                    'a2e': 'z',
+                    'alias': 'local',
+                    'alias_fmt': 3
+                },
+                'Raz{0}{1}1{0}{1}2'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+            ),
+
+        ) # format: (kwargs, expected_output)
+        # NOTE: this test makes an assumption that ROWIDs are always
+        # related to the order which an anchor was inserted into the
+        # database.
+        #
+        for a in argtests:
+            with self.subTest(a=a):
+                self.assertEqual(testrep.reltxt(**a[0]), a[1])
 
 class SLR_QClauseTests(TestCase):
     """Tests for _slr_q_clause()"""
