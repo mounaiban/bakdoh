@@ -247,8 +247,9 @@ class SQLiteRepo:
         self._db_conn.commit()
 
     def _slr_get_a(self, ae, **kwargs):
-        # Supported kwargs: cursor, is_alias, is_rel, q, (q_gt or q_gte),
-        # (q_lt or q_lte), q_not
+        # Supported kwargs: cursor, is_alias, is_rel, q,
+        # (q_gt or q_gte), (q_lt or q_lte), q_not
+        params = [ae,]
         sc_select = "SELECT {}, {} FROM {} ".format(
             self.col, self.col_q, self.table_a,
         )
@@ -258,13 +259,15 @@ class SQLiteRepo:
             is_alias=kwargs.get('is_alias', False)
         )
         sc = "".join((sc_select, sc_where))
-        # NOTE: all generated statements are expected to have just
-        # a single parameter at this time.
         if kwargs:
-            sc_q_range = self._slr_q_clause(**kwargs)
-            sc = "".join((sc, sc_q_range))
+            sc_q = self._slr_q_clause(**kwargs)
+            sc = "".join((sc, sc_q[0]))
+            params.extend(sc_q[1])
+        # NOTE: the number of parameters required by the
+        # statement can vary from one to three, depending
+        # on the arguments in use.
         cs = kwargs.get('cursor', self._slr_get_cursor())
-        return cs.execute(sc, (ae,))
+        return cs.execute(sc, params)
 
     def _slr_get_cursor(self):
         if not self._db_cus:
@@ -322,8 +325,13 @@ class SQLiteRepo:
 
     def _slr_q_clause(self, **kwargs):
         """
-        Returns an expression string for searching anchors by
-        q values, for use with SQL WHERE clauses.
+        Returns an tuple like (q_clause, params) where
+
+        * q_clause is a string for searching anchors by
+          q values for use with SQL WHERE clauses,
+
+        * params is a list of real numbers, in the correct
+          order, to be used with the clause.
 
         Arguments
         =========
@@ -341,7 +349,7 @@ class SQLiteRepo:
         * q_not: when set to True, prepare a clause for
           selecting anchors NOT within the range specified.
 
-        Arguments will be ignored if mutually exclusive
+        Some arguments will be ignored if mutually exclusive
         arguments are used together. The order of precedence
         is as follows: q, (q_gt or q_lt), (q_gte or q_lte)
 
@@ -350,47 +358,56 @@ class SQLiteRepo:
         If the lower bound is higher than the upper bound,
         a range exclusion expression will be returned.
 
-        e.g. q_gt=4, q_lt=3 returns "q > 4 OR q < 3",
-        equivalent to "NOT (q > 3 AND q < 4)"
+        e.g. the clause returned when q_gt=4, q_lt=3 is
+        " q > ? OR q < ?", equivalent to
+        " AND NOT (q > ? AND q < ?)"
 
         """
-        lbe = None  # lower bound
-        ub = None  # upper bound
+        andor = ""
+        clause = ""
+        lbe = None  # lower bound or exact value
         lbe_expr = ""
+        params = []
+        ub = None  # upper bound
         ub_expr = ""
-        inter = ""
         self._ck_q_isnum(ck_args=self.num_q_args, **kwargs)
         if 'q' in kwargs:
+            # exact
             lbe = kwargs['q']
-            lbe_expr = "{} = {}".format(self.col_q, lbe)
+            lbe_expr = "{} = ?".format(self.col_q)
+            params.append(lbe)
         else:
             # lower bound
             if 'q_gt' in kwargs:
                 lbe = kwargs['q_gt']
-                lbe_expr = "{} > {}".format(self.col_q, lbe)
+                lbe_expr = "{} > ?".format(self.col_q)
+                params.append(lbe)
             elif 'q_gte' in kwargs:
                 lbe = kwargs['q_gte']
-                lbe_expr = "{} >= {}".format(self.col_q, lbe)
+                lbe_expr = "{} >= ?".format(self.col_q)
+                params.append(lbe)
             # upper bound
             if 'q_lt' in kwargs:
                 ub = kwargs['q_lt']
-                ub_expr = "{} < {}".format(self.col_q, ub)
+                ub_expr = "{} < ?".format(self.col_q)
+                params.append(ub)
             elif 'q_lte' in kwargs:
                 ub = kwargs['q_lte']
-                ub_expr = "{} <= {}".format(self.col_q, ub)
+                ub_expr = "{} <= ?".format(self.col_q)
+                params.append(ub)
             if lbe is not None and ub is not None:
                 if lbe < ub:
-                    inter = " AND "
+                    andor = " AND "
                 else:
-                    inter = " OR "
+                    andor = " OR "
         if lbe is not None or ub is not None:
-            q_not = kwargs.get('q_not', False)
-            if q_not:
-                return " AND NOT ({}{}{})".format(lbe_expr, inter, ub_expr)
+            clause = "{}{}{}".format(lbe_expr, andor, ub_expr)
+            if kwargs.get('q_not', False):
+                return (" AND NOT ({})".format(clause), params)
             else:
-                return " AND {}{}{}".format(lbe_expr, inter, ub_expr)
+                return ("".join((" AND ", clause)), params)
         else:
-            return ''
+            return (clause, params)
 
     def reltxt(self, namee, a1e, a2e, alias=None, alias_fmt=3):
         """

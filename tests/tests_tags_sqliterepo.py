@@ -119,50 +119,53 @@ class SLR_QClauseTests(TestCase):
         """Generate SQL expression for q range in WHERE clause"""
         testrep = SQLiteRepo()
         argtests = (
-            ({}, ''),
-            ({'q':5}, ' AND {} = 5'),
-            ({'q':0}, ' AND {} = 0'),
-            ({'q_gt':1}, ' AND {} > 1'),
-            ({'q_gt':0}, ' AND {} > 0'),
-            ({'q_lt':9}, ' AND {} < 9'),
-            ({'q_lt':0}, ' AND {} < 0'),
-            ({'q_gt':1, 'q_lt':9}, ' AND {0} > 1 AND {0} < 9'),
-            ({'q_gt':0, 'q_lt':0}, ' AND {0} > 0 OR {0} < 0'), # edge case
-            ({'q_gt':1, 'q_lt':9, 'q_lte': 9}, ' AND {0} > 1 AND {0} < 9'),
-            ({'q_gte':1, 'q_lte':9}, ' AND {0} >= 1 AND {0} <= 9'),
-            ({'q_gt':9, 'q_lt':1}, ' AND {0} > 9 OR {0} < 1'),
-            ({'q_gt':9, 'q_gte':9, 'q_lt':1}, ' AND {0} > 9 OR {0} < 1'),
-            ({'q_gte':9, 'q_lte':1}, ' AND {0} >= 9 OR {0} <= 1'),
+            ({}, ('',[])),
+            ({'q':5}, (' AND {} = ?', [5,])),
+            ({'q':0}, (' AND {} = ?', [0,])),
+            ({'q_gt':1}, (' AND {} > ?', [1,])),
+            ({'q_gt':0}, (' AND {} > ?', [0,])),
+            ({'q_lt':9}, (' AND {} < ?', [9,])),
+            ({'q_lt':0}, (' AND {} < ?', [0,])),
+            ({'q_gt':1, 'q_lt':9}, (' AND {0} > ? AND {0} < ?', [1, 9])),
+            ({'q_gt':0, 'q_lt':0}, (' AND {0} > ? OR {0} < ?', [0, 0])),
             (
-                {'q_gt':9, 'q_gte':9, 'q_lt':1, 'q_lte':1},
-                ' AND {0} > 9 OR {0} < 1'
+                {'q_gt':1, 'q_lt':9, 'q_lte': 9},
+                (' AND {0} > ? AND {0} < ?', [1, 9])
+            ),
+            ({'q_gte':1, 'q_lte':9}, (' AND {0} >= ? AND {0} <= ?', [1, 9])),
+            ({'q_gt':9, 'q_lt':1}, (' AND {0} > ? OR {0} < ?', [9, 1])),
+            ({'q_gt':9, 'q_gte':7, 'q_lt':1}, (' AND {0} > ? OR {0} < ?',[9,1])),
+            ({'q_gte':9, 'q_lte':1}, (' AND {0} >= ? OR {0} <= ?', [9, 1])),
+            (
+                {'q_gt':9, 'q_gte':7, 'q_lt':3, 'q_lte':1},
+                (' AND {0} > ? OR {0} < ?', [9, 3])
             ),
             (
-                {'q_gt':1, 'q_gte':1, 'q_lt':9, 'q_lte':9},
-                ' AND {0} > 1 AND {0} < 9'
+                {'q_gt':1, 'q_gte':3, 'q_lt':7, 'q_lte':9},
+                (' AND {0} > ? AND {0} < ?', [1, 7])
             ),
             (
                 {'q':5, 'q_gt':9, 'q_gte':9, 'q_lt':1, 'q_lte':9},
-                ' AND {} = 5'
+                (' AND {} = ?', [5,])
             ),
         ) # format: (kwargs, expected_output)
           # PROTIP: {0} will be replaced with q-value column name
-        for x in argtests:
-            with self.subTest(args=x[0]):
-                expected = x[1].format(testrep.col_q)
-                self.assertEqual(testrep._slr_q_clause(**x[0]), expected)
+        for x, y in argtests:
+            with self.subTest(args=x):
+                expected = (y[0].format(testrep.col_q), y[1])
+                self.assertEqual(testrep._slr_q_clause(**x), expected)
 
     def test_not(self):
         """Generate SQL expression for q range in WHERE clause (q_not)"""
         testrep = SQLiteRepo()
         argtests = (
-            ({'q':5, 'q_not': True}, ' AND NOT ({} = 5)'),
-            ({'q':0, 'q_not': True}, ' AND NOT ({} = 0)'),
+            ({'q':5, 'q_not': True}, (' AND NOT ({} = ?)', [5,])),
+            ({'q':0, 'q_not': True}, (' AND NOT ({} = ?)', [0,])),
         )
-        for x in argtests:
-            with self.subTest(args=x[0]):
-                expected = x[1].format(testrep.col_q)
-                self.assertEqual(testrep._slr_q_clause(**x[0]), expected)
+        for x, y in argtests:
+            with self.subTest(args=x):
+                expected = (y[0].format(testrep.col_q), y[1])
+                self.assertEqual(testrep._slr_q_clause(**x), expected)
 
 class SLRDeleteATests(TestCase):
     """Tests for delete_a()"""
