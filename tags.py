@@ -253,7 +253,6 @@ class SQLiteRepo:
         sc_select = "SELECT {}, {} FROM {} ".format(
             self.col, self.col_q, self.table_a,
         )
-        is_alias = ae.startswith(CHARS_R_PX['A_ID'])
         sc_where = self._slr_a_where_clause(
             is_rel=kwargs.get('is_rel', False),
             is_alias=kwargs.get('is_alias', False)
