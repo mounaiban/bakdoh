@@ -694,15 +694,6 @@ class SQLiteRepo:
             else:
                 kwargs[n] = self._prep_term(kwargs[n])
         term = self.reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
-        relsrows = self._slr_get_a(term, is_rel=True, **kwargs)
-        anchs = (r[0].split(CHAR_REL)+[r[1],] for r in relsrows)
-        cs2 = self._db_conn.cursor() # needed to resolve anchor from name
-        return(
-            (
-                k[0],
-                next(self.get_a(k[1], cursor=cs2)),
-                next(self.get_a(k[2], cursor=cs2)),
-                k[3]
-            ) for k in anchs
-        )
+        rels = self._slr_get_a(term, is_rel=True, **kwargs)
+        return (r[0].split(CHAR_REL)+[r[1],] for r in rels)
 

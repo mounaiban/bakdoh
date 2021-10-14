@@ -546,64 +546,59 @@ class SLRGetRelsTests(TestCase):
     def test_get_rels_name_exact(self):
         """Get relations with exact name"""
         testrep = SQLiteRepo()
-        aa = ('a', None)
-        az = ('z', None)
-        anchors = (aa, az)
-        rels = [('Raz0', aa, az, None), ('Raz1', aa, az, None)]
-        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
+        rt = testrep.reltxt
+        anchors = (('a', None), ('z', None))
+        rels = [['Raz0', 'a', 'z', None], ['Raz1', 'a', 'z', None]]
         direct_insert(testrep, anchors)
-        direct_insert(testrep, rels_sql)
+        direct_insert(testrep, ((testrep.reltxt(*x[:3]), x[3]) for x in rels))
         ##
-        samp = [x for x in testrep.get_rels(name='Raz0')]
+        samp = list(testrep.get_rels(name='Raz0'))
         expected = [rels[0],]
         self.assertEqual(samp, expected)
 
     def test_get_rels_a_exact(self):
         """Get relations by exact anchor (with or without quantity)"""
         testrep = SQLiteRepo()
-        aa = ('a', None)
-        az = ('z', None)
-        anchors = (aa, az)
-        rels = [('Raz0', aa, az, None), ('Raz1', aa, az, None)]
-        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
+        rt = testrep.reltxt
+        anchors = (('a', None), ('z', None))
+        rels = [['Raz0', 'a', 'z', None], ['Raz1', 'a', 'z', None]]
         direct_insert(testrep, anchors)
-        direct_insert(testrep, rels_sql)
+        direct_insert(testrep, ((testrep.reltxt(*x[:3]), x[3]) for x in rels))
         ##
-        samp = [x for x in testrep.get_rels(name='Raz0')]
+        samp = list(testrep.get_rels(name='Raz0'))
         expected = [rels[0],]
         self.assertEqual(samp, expected)
-        samp = [x for x in testrep.get_rels(name='Raz1')]
+        samp = list(testrep.get_rels(name='Raz1'))
         expected = [rels[1],]
 
     def test_get_rels_a_eq_q_range(self):
         """Get relations by exact anchors and quantity range"""
         testrep = SQLiteRepo()
-        aa = ('a', None)
-        az = ('z', None)
+        rt = testrep.reltxt
         data = (
-            aa,
-            az,
-            (testrep.reltxt('RazN', 'a', 'z'), None),
-            (testrep.reltxt('Raz0', 'a', 'z'), 0),
-            (testrep.reltxt('Raz2', 'a', 'z'), 0.2),
-            (testrep.reltxt('Raz4', 'a', 'z'), 0.4),
-            (testrep.reltxt('Rza6', 'z', 'a'), 0.6),
-            (testrep.reltxt('Rza8', 'z', 'a'), 0.8),
+            ('a', None),
+            ('z', None),
+            (rt('RazN', 'a', 'z'), None),
+            (rt('Raz0', 'a', 'z'), 0),
+            (rt('Raz2', 'a', 'z'), 0.2),
+            (rt('Raz4', 'a', 'z'), 0.4),
+            (rt('Rza6', 'z', 'a'), 0.6),
+            (rt('Rza8', 'z', 'a'), 0.8),
         )
         direct_insert(testrep, data)
         ##
         tests = (
             (
                 {'a_from': 'a', 'a_to': 'z', 'q_gt': 0.1},
-                [('Raz2', aa, az, 0.2), ('Raz4', aa, az, 0.4)]
+                [['Raz2', 'a', 'z', 0.2], ['Raz4', 'a', 'z', 0.4]]
             ),
             (
                 {'a_from': 'a', 'a_to': 'z', 'q_lt': 0.4},
-                [('Raz0', aa, az, 0), ('Raz2', aa, az, 0.2)]
+                [['Raz0', 'a', 'z', 0], ['Raz2', 'a', 'z', 0.2]]
             ),
             (
                 {'a_from': 'z', 'a_to': 'a', 'q_lte': 0.8},
-                [('Rza6', az, aa, 0.6), ('Rza8', az, aa, 0.8)]
+                [['Rza6', 'z', 'a', 0.6], ['Rza8', 'z', 'a', 0.8]]
             ),
         ) # format: (kwargs, expected_result)
         ##
@@ -615,28 +610,27 @@ class SLRGetRelsTests(TestCase):
     def test_get_rels_a_eq_q_not_range(self):
         """Get relations by exact anchors and quantity range"""
         testrep = SQLiteRepo()
-        aa = ('a', None)
-        az = ('z', None)
+        rt = testrep.reltxt
         data = (
-            aa,
-            az,
-            (testrep.reltxt('RazN', 'a', 'z'), None),
-            (testrep.reltxt('Raz0', 'a', 'z'), 0),
-            (testrep.reltxt('Raz2', 'a', 'z'), 0.2),
-            (testrep.reltxt('Raz4', 'a', 'z'), 0.4),
-            (testrep.reltxt('Rza6', 'z', 'a'), 0.6),
-            (testrep.reltxt('Rza8', 'z', 'a'), 0.8),
+            ('a', None),
+            ('z', None),
+            (rt('RazN', 'a', 'z'), None),
+            (rt('Raz0', 'a', 'z'), 0),
+            (rt('Raz2', 'a', 'z'), 0.2),
+            (rt('Raz4', 'a', 'z'), 0.4),
+            (rt('Rza6', 'z', 'a'), 0.6),
+            (rt('Rza8', 'z', 'a'), 0.8),
         )
         direct_insert(testrep, data)
         ##
         tests = (
             (
                 {'a_from': 'a', 'a_to': 'z', 'q_gt': 0.1, 'q_not': True},
-                [('Raz0', aa, az, 0),]
+                [['Raz0', 'a', 'z', 0],]
             ),
             (
                 {'a_from': 'a', 'a_to': 'z', 'q_lt': 0.1, 'q_not': True},
-                [('Raz2', aa, az, 0.2), ('Raz4', aa, az, 0.4)]
+                [['Raz2', 'a', 'z', 0.2], ['Raz4', 'a', 'z', 0.4]]
             ),
             (
                 {'a_from': 'z', 'a_to': 'a', 'q_lte': 0.8, 'q_not': True},
@@ -652,62 +646,52 @@ class SLRGetRelsTests(TestCase):
     def test_get_rels_name_wildcard_suffix(self):
         """Get relations by name suffix wildcard (with/without quantity)"""
         testrep = SQLiteRepo()
-        aa = ('a', None)
-        an = ('n', None)
-        az = ('z', None)
-        anchors = (aa, an, az)
+        rt = testrep.reltxt
+        anchors = (('a', None), ('n', None), ('z', None))
         rels = (
-            ('Ran0', aa, an, None),
-            ('Raz1', aa, az, 11),
-            ('Rna2', an, aa, 22),
+            ['Ran0', 'a', 'n', None],
+            ['Raz1', 'a', 'z', 11],
+            ['Rna2', 'n', 'a', 22],
         )
-        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
         direct_insert(testrep, anchors)
-        direct_insert(testrep, rels_sql)
+        direct_insert(testrep, ((testrep.reltxt(*x[:3]), x[3]) for x in rels))
         ##
-        samp = [x for x in testrep.get_rels(name='Ra*')] # all rels from a
+        samp = list(testrep.get_rels(name='Ra*')) # all rels from a
         expected = [rels[0], rels[1]]
         self.assertEqual(samp, expected)
 
     def test_get_rels_a_from_wildcard_suffix(self):
         """Get relations by source anchor wildcard (with/without quantity)"""
         testrep = SQLiteRepo()
-        a0 = ('a0', None)
-        a1 = ('a1', None)
-        z = ('z', None)
-        anchors = (a0, a1, z)
+        anchors = (('a0', None), ('a1', None), ('z', None))
         rels = (
-            ('Ra0z0', a0, z, None),
-            ('Ra1z1', a1, z, 11),
-            ('Rza12', z, a1, 22),
-            ('Ra1a03', a1, a0, 33),
+            ['Ra0z0', 'a0', 'z', None],
+            ['Ra1z1', 'a1', 'z', 11],
+            ['Rza12', 'z', 'a1', 22],
+            ['Ra1a03', 'a1', 'a0', 33],
         )
-        rels_sql = [(testrep.reltxt(n, af[0], at[0]), q) for n, af, at, q in rels]
         direct_insert(testrep, anchors)
-        direct_insert(testrep, rels_sql)
+        direct_insert(testrep, ((testrep.reltxt(*x[:3]), x[3]) for x in rels))
         ##
-        samp = [x for x in testrep.get_rels(a_from='a*')] # rels from a0 & a1
+        samp = list(testrep.get_rels(a_from='a*')) # rels from a0 & a1
         expected = [rels[0], rels[1], rels[3]]
         self.assertEqual(samp, expected)
 
     def test_get_rels_a_to_wildcard_suffix(self):
         """Get relations by target anchor wildcard (with/without quantity)"""
         testrep = SQLiteRepo()
-        a0 = ('a0', None)
-        a1 = ('a1', None)
-        z = ('z', None)
-        anchors = (a0, a1, z)
+        rt = testrep.reltxt
+        anchors = (('a0', None), ('a1', None), ('z', None))
         rels = (
-            ('Ra0a10', a0, a1, None),
-            ('Ra1z1', a1, z, 11),
-            ('Rza02', z, a0, 22),
-            ('Rza13', z, a1, 33),
+            ['Ra0a10', 'a0', 'a1', None],
+            ['Ra1z1', 'a1', 'z', 11],
+            ['Rza02', 'z', 'a0', 22],
+            ['Rza13', 'z', 'a1', 33],
         )
-        rels_sql = [(testrep.reltxt(n, f[0], t[0]), q) for n, f, t, q in rels]
         direct_insert(testrep, anchors)
-        direct_insert(testrep, rels_sql)
+        direct_insert(testrep, ((testrep.reltxt(*x[:3]), x[3]) for x in rels))
         ##
-        samp = [x for x in testrep.get_rels(a_to='a*')] # rels from a0 & a1
+        samp = list(testrep.get_rels(a_to='a*')) # rels from a0 & a1
         expected = [rels[0], rels[2], rels[3]]
         self.assertEqual(samp, expected)
 
