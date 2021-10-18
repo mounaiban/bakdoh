@@ -55,6 +55,330 @@ def uesc_dict(d):
         out[ord(v)] = r"&#{};".format(ord(v))
     return out
 
+class Anchor:
+    # Anchor (graph node) class. Includes navigation methods.
+    def __init__(self, content, q=None, **kwargs):
+        # kwargs accepted: get_q (bool), db
+        self.db = kwargs.get('db')
+        self.content = content
+        self.q = q
+        if kwargs.get('get_q', True) and self.q is None:
+            self.get_q()
+
+    def __eq__(self, other):
+        """Anchor comparison: two Anchors are of equal value when
+        both content and q are of equal value
+
+        """
+        return (self.q == other.q) and (self.content == other.content)
+
+    def __repr__(self):
+        return "Anchor({},q={})".format(self.content, self.q)
+
+    def get_q(self):
+        """Refresh the q value of the anchor from the database
+        and return the q value
+
+        """
+        self.q = next(self.db.repo.get_a(self.content))[1]
+        return self.q
+
+    def rels_out(self, s):
+        # get names of relations linked from this anchor matching a pattern
+        return self.db.get_rel_names(s, a_from=self.content)
+
+    def rels_in(self, s):
+        # get names of relations linked to this anchor matching a pattern
+        return self.db.get_rel_names(s, a_to=self.content)
+
+    def related_to(self, rel):
+        # Get anchors in relations matching rel linked from this anchor
+        return (
+            (a[0],a[2],a[3])
+            for a in self.db.get_rels(name=rel, a_from=self.content)
+        )
+
+    def related_from(self, rel):
+        # Get anchors in relations matching rel linked to this anchor
+        return (
+            (a[0],a[1],a[3])
+            for a in self.db.get_rels(name=rel, a_to=self.content)
+        )
+
+class DB:
+    # Database interface class for loading and storing anchors to a
+    # database. Connect a backing store via a repository class
+    # (such as SQLiteRepo) to start using databases.
+    #
+    # This class also serves as a reference interface for repositories
+
+    def __init__(self, repo, **kwargs):
+        # Prepare repository 'repo' beforehand, then set up a DB
+        # like: DB(repo)
+        #
+        # Please see the documentation for the repository class
+        # for details on how to create or load databases
+        self.repo = repo
+
+    def delete_a(self, s, **kwargs):
+        """
+        Delete anchors matching 's'.
+
+        Accepts the same arguments and wildcard syntax as get_rels(),
+        please see the documentation for that method for details.
+
+        Accepted arguments: s, q, (q_gt or q_gte), (q_lt or q_lte).
+        See get_a() for details on how to use the q-arguments.
+
+        Wildcards
+        =========
+        See get_a(); this method uses the same wildcard syntax.
+
+        If any name or anchor contains an asterisk or question mark,
+        use the HTML entities '&ast;' and '&quest;' instead.
+
+        Examples
+        ========
+        * delete_a('apple') : delete the anchor 'apple'
+
+        * delete_a('app*') : delete all anchors starting with 'app'
+
+        * delete_a('ch????') : delete all six-character anchors
+          starting with 'ch'
+
+        Notes
+        =====
+        * If any name or anchor contains an asterisk, or question mark,
+          use the escape sequence &ast; and &quest; instead.
+
+        * Use wildcards with caution, as with any other delete operation
+          in any database system.
+
+        """
+        self.repo.delete_a(a)
+
+    def delete_rels(self, **kwargs):
+        """
+        Delete relations by anchor, name or wildcard.
+
+        Accepts the same arguments and wildcard syntax as get_rels(),
+        please see the documentation for that method for details.
+
+        Accepted arguments: a_from, a_to, name, q, (q_gt or q_gte),
+        (q_lt or q_lte)
+
+        At least either a_to or a_from must be specified.
+
+        Wildcards
+        =========
+        See get_a(); this method uses the same wildcard syntax.
+
+        If any name or anchor contains an asterisk or question mark,
+        use the HTML entities '&ast;' and '&quest;' instead.
+
+        Examples
+        ========
+        * delete_rels(a_from='apple') : delete all relations from the
+          anchor 'apple'
+
+        * delete_rels(a_to='berry') : delete all relations to anchor 'berry'
+
+        * delete_rels(a_to='app*') :  delete all relations pointing to
+          anchors starting with 'app'
+
+        * delete_rels(a_from='apple', a_to='berry') : delete all relations
+          from the anchor 'apple' to the anchor 'berry'
+
+        * delete_rels(name='rel*', a_from='apple', a_to='blackberry')
+          Delete all relations from the anchor 'apple' to the
+          'berry' with names starting with 'rel'
+
+        Notes
+        =====
+        * If any name or anchor contains an asterisk, or question mark,
+          use the escape sequence &ast; and &quest; instead.
+
+        * Use wildcards with caution, as with any other delete operation
+          in any database system.
+
+        """
+        self.repo.delete_rels(**kwargs)
+
+    def get_a(self, a, **kwargs):
+        """
+        Return an iterator containing anchors by content or
+        wildcard.
+
+        Arguments
+        =========
+        * name : return only relations matching 'name'
+
+        * q : return only relations with a q-value equals to 'q'
+
+        * q_gt : return only relations with a q-value greater than 'q_gt';
+         cannot be used with 'q' or 'q_gte'
+
+        * q_gte : return only relations with a q-value greater than or equal
+          to 'q_gte'; cannot be used with 'q' or 'q_gt'
+
+        * q_lt : return only relations with a q-value smaller than 'q_lt';
+         cannot be used with 'q' or 'q_lte'
+
+        * q_lte : return only relations with a q-value smaller than or
+          equal to 'q_lte'; cannot be used with 'q' or 'q_lt'
+
+        Wildcards
+        =========
+        The following Unix glob-like wildcards are accepted:
+
+        * asterisk (*) : zero or more characters
+
+        * question mark (?) : any one character
+
+        If any name or anchor contains an asterisk or question mark,
+        use the HTML entities '&ast;' and '&quest;' instead.
+
+        Examples
+        ========
+        * get_a('apple') : get the anchor 'apple'
+
+        * get_a('be*') : get all anchors starting with 'be'
+
+        * get_a('ch????') : get all anchors with six characters starting
+          with 'ch'
+
+        """
+        return (
+            Anchor(a, q, db=self) for a, q in self.repo.get_a(a, **kwargs)
+        )
+
+    def get_rel_names(self, s, **kwargs):
+        # Return an iterator of relation names in use between
+        # two anchors, a_from and a_to, matching s
+        return (r[0] for r in self.repo.get_rel_names(s, **kwargs))
+
+    def get_rels(self, **kwargs):
+        """
+        Return an iterator containing relations by name, anchor, or
+        wildcard. Each relation is presented as a list of four
+        elements:
+
+        [relation_name, from_anchor, to_anchor, quantity]
+
+        Arguments
+        =========
+        * a_from : return only relations from anchors matching 'a_from'
+
+        * a_to : return only relations towards anchors matching 'a_from'
+
+        * name : return only relations matching 'name'
+
+        * q : return only relations with a q-value equals to 'q'
+
+        * q_gt : return only relations with a q-value greater than 'q_gt';
+         cannot be used with 'q' or 'q_gte'
+
+        * q_gte : return only relations with a q-value greater than or equal
+          to 'q_gte'; cannot be used with 'q' or 'q_gt'
+
+        * q_lt : return only relations with a q-value smaller than 'q_lt';
+         cannot be used with 'q' or 'q_lte'
+
+        * q_lte : return only relations with a q-value smaller than or
+          equal to 'q_lte'; cannot be used with 'q' or 'q_lt'
+
+        Wildcards
+        =========
+        See get_a(); this method uses the same wildcard syntax.
+
+        If any name or anchor contains an asterisk or question mark,
+        use the HTML entities '&ast;' and '&quest;' instead.
+
+        Examples
+        ========
+        * get_rels(a_from='apple') : relations from the anchor 'apple'
+
+        * get_rels(a_to='berry') : relations to anchor 'berry'
+
+        * get_rels(a_to='ap*') : relations to anchors starting with 'ap'
+
+        * get_rels(a_to='ch????') : relations pointing to anchors with
+          six characters and starting with 'ch'
+
+        * get_rels(a_from='apple', a_to='berry') : relations from anchor
+          'apple' to anchor 'berry'
+
+        * get_rels(name='mashup*', a_from='apple', a_to='berry)
+          relations from the anchor 'apple' to the anchor 'berry'
+          with names starting with 'mashup'
+
+        """
+        return (
+            (n, next(self.get_a(f)), next(self.get_a(t)), q)
+            for n, f, t, q in self.repo.get_rels(**kwargs)
+        )
+
+    def incr_a_q(self, a, d):
+        """
+        Increment or decrement a quantity assigned to anchor 'a'
+        by d. When d<0, the quantity is decreased.
+
+        If no value has been assigned to the anchor, this method
+        has no effect.
+
+        """
+        self.repo.incr_a_q(a, d)
+
+    def incr_rel_q(self, name, a_from, a_to, d):
+        """
+        Increment or decrement a quantity assigned to a relation between
+        a_from and a_to by d. When d<0, the quantity is decreased.
+
+        If no value has been assigned to the relation, this method has
+        no effect.
+
+        """
+        self.repo.incr_rel_q(name, a_from, a_to, d)
+
+    def put_a(self, a, q=None):
+        """
+        Create an anchor containing str 'a' and an optional
+        numerical quantity value 'q'.
+
+        Anchors of the same content can only be inserted once
+        per database.
+
+        """
+        self.repo.put_a(a, q)
+
+    def put_rel(self, rel, a_from, a_to, q=None):
+        """
+        Create a relation between anchors 'a_from and 'a_to', with
+        an optional numerical quantity value 'q'.
+
+        Only one relation for each combination of name, source anchor
+        and destination anchor may be present in the database at
+        any given time.
+
+        """
+        # TODO: returning information about the anchor/relation
+        # from invoking put_rel() or put_a() may be helpful
+        self.repo.put_rel(rel, a_from, a_to)
+
+    def set_a_q(self, s, q):
+        """
+        Assign a numerical quantity q to an anchor 's'.
+
+        """
+        self.repo.set_a_q(s, q)
+
+    def set_rel_q(self, name, a_from, a_to, q):
+        """
+        Assign a numerical quantity q to a relation between anchors
+        a_from and a_to.
+
+        """
+        self.repo.set_rel_q(name, a_from, a_to, q)
 
 class SQLiteRepo:
     """
@@ -247,8 +571,15 @@ class SQLiteRepo:
         self._db_conn.commit()
 
     def _slr_get_a(self, ae, **kwargs):
-        # Supported kwargs: cursor, is_alias, is_rel, q,
-        # (q_gt or q_gte), (q_lt or q_lte), q_not
+        """Helper method used by get_a() and get_rels() to fetch anchors
+        and relations from the SQLite backing store.
+
+        Please see DB.get_rels() for usage
+
+        Supported kwargs: cursor, is_rel, q, (q_gt or q_gte),
+        (q_lt or q_lte), q_not
+
+        """
         params = [ae,]
         sc_select = "SELECT {}, {} FROM {} ".format(
             self.col, self.col_q, self.table_a,
@@ -265,7 +596,7 @@ class SQLiteRepo:
         # NOTE: the number of parameters required by the
         # statement can vary from one to three, depending
         # on the arguments in use.
-        cs = kwargs.get('cursor', self._slr_get_cursor())
+        cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, params)
 
     def _slr_get_cursor(self):
@@ -463,14 +794,19 @@ class SQLiteRepo:
         return '{}{}{}{}{}'.format(namee, CHAR_REL, af, CHAR_REL, at)
 
     def get_a(self, a, **kwargs):
-        """
-        Get an iterator containing anchors matching a. Use '*' as a
-        wildcard for zero or more characters, or '.' as a wildcard
-        for a single character.
+        """Handle DB request to return an iterator of anchors.
+        Accepts the same arguments as DB.get_a() with some differences;
+        please see the documentation for the method for details.
 
-        Alternate cursors may be specified using the cursor keyword
-        argument. This is used internally by get_rels() in order
-        to resolve relations to anchors.
+        SQLite Repository-Specific Features
+        ===================================
+        * Anchors can be accessed with a local alias, by using a search
+          term starting with the at-sign '@', followed by the anchor's ROWID.
+          For example, if the anchor 'durian' has a ROWID of 7, then '@7'
+          returns 'durian'.
+
+          Aliases are an experimental feature which may be removed in
+          future releases.
 
         """
         is_alias = a.startswith(CHARS_R_PX['A_ID'])
@@ -486,32 +822,25 @@ class SQLiteRepo:
         self._slr_insert_into_a(self._prep_a(a), q)
 
     def set_a_q(self, a, q):
-        """
-        Assign a numerical quantity q to an anchor a.
+        """Handle DB request to assign a numerical quantity to an
+        anchor. Called from DB.set_a_q()
 
         """
         self._ck_q_isnum(q=q)
         self._slr_set_q(self._prep_a(a), q)
 
     def incr_a_q(self, a, d):
-        """
-        Increment or decrement a quantity assigned to anchor a by
-        d. When d<0, the quantity is decreased.
-
-        If no value has been assigned to the anchor, this method has
-        no effect.
+        """Handle DB request to increment/decrement a numerical
+        quantity of an anchor. Called from DB.incr_a_q()
 
         """
         self._ck_q_isnum(d=d)
         self._slr_incr_q(self._prep_a(a), d)
 
     def delete_a(self, a):
-        """
-        Delete anchors matching a. Specify the exact name of an
-        anchor, or use the asterisk '*' as a wildcard (with caution).
-
-        If the name of the anchor contains an asterisk, use the
-        escape sequence &ast; instead.
+        """Handle DB request to delete anchors. Accepts the same arguments
+        as DB.delete_a(). Please see the documentation of that method
+        for usage.
 
         """
         sc_delete = "DELETE FROM {} ".format(self.table_a)
@@ -521,13 +850,16 @@ class SQLiteRepo:
         self._db_conn.commit()
 
     def put_rel(self, name, a1, a2, q=None, **kwargs):
-        """
-        Create a relation between anchors a1 and a2, with an
-        optional numerical quantity value q.
+        """Handle DB request to create anchors. Accepts the same arguments
+        as DB.put_rel(). Please see the documentation of that method
+        for usage.
 
-        Use the keyword argument prep_a=False to skip anchor
-        name preprocessing, usually in order to create aliased
-        relations.
+        SQLite Repository-Specific Features
+        ===================================
+        * Arguments: alias, alias_fmt, prep_a
+
+        * The anchor preparation process may be bypassed by setting
+          the 'prep_a' argument to False.
 
         """
         ck_fns = (
@@ -555,9 +887,9 @@ class SQLiteRepo:
                 raise ValueError('relation already exists')
 
     def set_rel_q(self, name, a_from, a_to, q):
-        """
-        Assign a numerical quantity q to a relation between anchors
-        a_from and a_to.
+        """Handle DB request to set the numerical quantity assigned
+        to the relationship named 'name' from anchor 'a_from' to
+        'a_to'. Called from DB.set_rel_q()
 
         """
         ck_fns = (
@@ -573,12 +905,9 @@ class SQLiteRepo:
         self._slr_set_q(term, q)
 
     def incr_rel_q(self, name, a_from, a_to, d):
-        """
-        Increment or decrement a quantity assigned to a relation between
-        a_from and a_to by d. When d<0, the quantity is decreased.
-
-        If no value has been assigned to the relation, this method has
-        no effect.
+        """Handle DB request to increment/decrement the numerical
+        quantity assigned to the relationship named 'name' from anchor
+        'a_from' to 'a_to'. Called from DB.incr_rel_q()
 
         """
         ck_fns = (
@@ -594,38 +923,9 @@ class SQLiteRepo:
         self._slr_incr_q(term, d)
 
     def delete_rels(self, **kwargs):
-        """
-        Delete relations by anchor, name or wildcard.
-
-        Examples
-        ========
-        delete_rels(a_from='apple')
-        Delete all relations from the anchor 'apple'
-
-        delete_rels(a_to='blackberry')
-        Delete all relations pointing to anchor 'apple'
-
-        delete_rels(a_to='anti*')
-        Delete all relations pointing to anchors starting with
-        'anti-'
-
-        delete_rels(a_from='apple', a_to='blackberry')
-        Delete all relations from the anchor 'apple' to the
-        anchor 'blackberry'
-
-        delete_rels(name='mashup*', a_from='apple', a_to='blackberry')
-        Delete all relations from the anchor 'apple' to the
-        anchor 'blackberry' with names starting with 'mashup-'
-
-        Notes
-        =====
-        * At least either a_to or a_from must be specified.
-
-        * If any name or anchor contains an asterisk, or question mark,
-          use the escape sequence &ast; and &quest; instead.
-
-        * Use wildcards with caution, as with any other delete operation
-          in any database system.
+        """Handle DB request to delete relations. Accepts the same arguments
+        as DB.delete_rels(). Please see the documentation of that method
+        for usage.
 
         """
         a_to = kwargs.get('a_to')
@@ -652,41 +952,39 @@ class SQLiteRepo:
         cs.execute(sc, (term,))
         self._db_conn.commit()
 
+    def get_rel_names(self, s, **kwargs):
+        """Handle DB request to return an iterator of names of relations
+        in use from anchor 'a_from' to anchor 'a_to'. Accepts the same
+        arguments as DB.get_rel_names. Please see the documentation
+        of that method for usage.
+
+        SQLite Repository-Specific Features
+        ===================================
+        * cursor : specify a SQLite cursor for performing the lookup;
+          using a particular cursor is only really needed in exceptional
+          circumstances.
+
+        """
+        sc_relnames = """
+                SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
+            """.format(self.col, CHAR_REL, self.table_a)
+        sc_where = self._slr_a_where_clause(is_rel=True)
+        sc = "".join((sc_relnames, sc_where))
+        wczp = CHARS_R_WC['WILDCARD_ZEROPLUS']
+        term = self._prep_term(self.reltxt(
+            s,
+            kwargs.get('a_from', wczp),
+            kwargs.get('a_to', wczp)
+        ))
+        cs = kwargs.get('cursor', self._slr_get_cursor())
+        return cs.execute(sc, (term,))
+
     def get_rels(self, **kwargs):
-        """
-        Return an iterator containing relations by name, anchor, or
-        wildcard. Each relation is a list of four elements:
-
-        [relation_name, from_anchor, to_anchor, quantity]
-
-        Examples
-        ========
-        get_rels(a_from='apple')
-        Return all relations from the anchor 'apple'
-
-        get_rels(a_to='blackberry')
-        Return all relations pointing to anchor 'apple'
-
-        get_rels(a_to='anti*')
-        Return all relations pointing to anchors starting with
-        'anti-'
-
-        get_rels(a_from='apple', a_to='blackberry')
-        Return all relations from the anchor 'apple' to the
-        anchor 'blackberry'
-
-        get_rels(name='mashup*', a_from='apple', a_to='blackberry')
-        Return all relations from the anchor 'apple' to the
-        anchor 'blackberry' with names starting with 'mashup-'
-
-        Note
-        ====
-        * If any name or anchor contains an asterisk or question mark,
-          use the HTML entities '&ast;' and '&quest;' instead.
+        """Handle DB request to return an iterator of relations.
+        Accepts the same arguments as DB.get_rels(). Please see the
+        documentation of that method for usage.
 
         """
-        # TODO: Also return aliased relations in results even when
-        # anchor names are used
         nameargs = ('name', 'a_from', 'a_to')
         for n in nameargs:
             if n not in kwargs:

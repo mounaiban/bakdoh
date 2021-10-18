@@ -17,6 +17,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # limitations under the License.
 
 from tags import SQLiteRepo, CHAR_REL, CHARS_R_PX
+from tests.db import DBGetTests, DBWriteTests
 from unittest import TestCase
 
 def direct_insert(repo, data):
@@ -46,6 +47,31 @@ def direct_select_all(repo, term='%'):
     cus = repo._slr_get_cursor()
     rows = cus.execute(sc_ck, (term,))
     return [x for x in rows]
+
+class SlrDbGetTests(DBGetTests):
+    """
+    Run the Database Get Tests with a SQLiteRepository.
+    Please see DBGetTests in the tests.db module for details
+
+    """
+    RepoClass = SQLiteRepo
+
+    def direct_insert(self, db, a):
+        direct_insert(db.repo, a) # PROTIP: module-level direct_insert()
+
+class SlrDbWriteTests(DBWriteTests):
+    """
+    Run Database Delete, Put and Set q-value Tests with a
+    SQLiteRepository.
+
+    Please see DBWriteTests in the tests.db module for details
+
+    """
+    RepoClass = SQLiteRepo
+
+    def dump(self, db, term=None):
+        if not term: term='%'
+        return direct_select_all(db.repo, term)
 
 class SLR_ReltextTests(TestCase):
     """Tests for reltext()"""
