@@ -16,22 +16,38 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tags import SQLiteRepo, CHAR_REL, CHARS_R_PX
+from tags import Anchor, CHAR_REL, CHARS_R_PX, SQLiteRepo
 from tests.db import DBGetTests, DBWriteTests
 from unittest import TestCase
 
-def direct_insert(repo, data):
+def direct_insert(repo, anchors):
     """
-    Insert anchors directly into an SQLiteRepo
+    Insert anchors directly into an SQLiteRepo. Uses the same
+    arguments as direct_insert(), see tests.db for details.
 
-    Argument 'data' contains anchors and corresponding q
-    (quantity) value in a format like: ((anchor_0, q_0),
-    (anchor_1, q_1), ...)
+    Examples:
+    Insert anchors: direct_insert(repo, (('a1', 0), ('z1', 1)))
+    Insert relation: direct_insert(repo, (('r', 'a1', 'z1', 99),))
 
     """
     sc = "INSERT INTO {} VALUES (?,?)".format(SQLiteRepo.table_a)
     cus = repo._slr_get_cursor()
-    cus.executemany(sc, data)
+    for a in anchors:
+        ts = list(map(lambda x:type(x), a))
+        if len(a) == 4:
+            # relation
+            types = [
+                [str, str, str, int],
+                [str, str, str, float],
+                [str, str, str, type(None)],
+            ]
+            if ts in types:
+                cus.execute(sc, (repo.reltxt(a[0], a[1], a[2]), a[3]))
+        elif len(a) == 2:
+            # anchor
+            types = [[str, int], [str, float], [str, type(None)]]
+            if ts in types:
+                cus.execute(sc, (a[0], a[1],))
 
 def direct_select_all(repo, term='%'):
     """
@@ -220,12 +236,14 @@ class SLRDeleteATests(TestCase):
             ('a1', None),
             ('n', None),
             ('z', None),
-            (testrep.reltxt('aRnz', 'n', 'z'), None),
+            ('aRnz', 'n', 'z', None),
         ]
         direct_insert(testrep, data)
         ##
         testrep.delete_a('a*')
-        expected = [('n', None), ('z', None), (testrep.reltxt('aRnz', 'n', 'z'), None)]
+        expected = [
+            ('n', None), ('z', None), (testrep.reltxt('aRnz', 'n', 'z'), None)
+        ]
         samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
@@ -244,9 +262,9 @@ class SLRGetATests(TestCase):
             ('a', None),
             ('n', None),
             ('z', None),
-            (testrep.reltxt('aRan', 'a', 'n'), None),
-            (testrep.reltxt('nRna', 'n', 'a'), None),
-            (testrep.reltxt('zRzn', 'z', 'n'), None),
+            ('aRan', 'a', 'n', None),
+            ('nRna', 'n', 'a', None),
+            ('zRzn', 'z', 'n', None),
         )
         direct_insert(testrep, data)
         ##
@@ -523,7 +541,7 @@ class SLRDeleteRelsTests(TestCase):
     def test_delete_rels_exact_afrom(self):
         """Delete relations with exact name"""
         testrep = SQLiteRepo()
-        data = [('a', None), ('z', None), (testrep.reltxt('Raz', 'a', 'z'), None)]
+        data = [('a', None), ('z', None), ('Raz', 'a', 'z', None)]
         direct_insert(testrep, data)
         ##
         testrep.delete_rels(a_from='a')
@@ -544,7 +562,7 @@ class SLRDeleteRelsTests(TestCase):
             ('a', None),
             ('z', None),
             ('Raz', None),
-            (testrep.reltxt('Raz', 'a', 'z'), None)
+            ('Raz', 'a', 'z', None)
         ]
         direct_insert(testrep, data)
         ##
@@ -557,7 +575,7 @@ class SLRDeleteRelsTests(TestCase):
     def test_delete_rels_exact_ato(self):
         """Delete relations by exact destination anchor name"""
         testrep = SQLiteRepo()
-        data = [('a', None), ('z', None), (testrep.reltxt('Raz', 'a', 'z'), None)]
+        data = [('a', None), ('z', None), ('Raz', 'a', 'z', None)]
         direct_insert(testrep, data)
         ##
         testrep.delete_rels(a_to='z')
@@ -573,13 +591,16 @@ class SLRGetRelsTests(TestCase):
         """Get relations with exact name"""
         testrep = SQLiteRepo()
         rt = testrep.reltxt
-        anchors = (('a', None), ('z', None))
-        rels = [['Raz0', 'a', 'z', None], ['Raz1', 'a', 'z', None]]
-        direct_insert(testrep, anchors)
-        direct_insert(testrep, ((testrep.reltxt(*x[:3]), x[3]) for x in rels))
+        data = (
+            ('a', None),
+            ('z', None),
+            ['Raz0', 'a', 'z', None],
+            ['Raz1', 'a', 'z', None]
+        )
+        direct_insert(testrep, data)
         ##
         samp = list(testrep.get_rels(name='Raz0'))
-        expected = [rels[0],]
+        expected = [data[2],]
         self.assertEqual(samp, expected)
 
     def test_get_rels_a_exact(self):
@@ -600,16 +621,15 @@ class SLRGetRelsTests(TestCase):
     def test_get_rels_a_eq_q_range(self):
         """Get relations by exact anchors and quantity range"""
         testrep = SQLiteRepo()
-        rt = testrep.reltxt
         data = (
             ('a', None),
             ('z', None),
-            (rt('RazN', 'a', 'z'), None),
-            (rt('Raz0', 'a', 'z'), 0),
-            (rt('Raz2', 'a', 'z'), 0.2),
-            (rt('Raz4', 'a', 'z'), 0.4),
-            (rt('Rza6', 'z', 'a'), 0.6),
-            (rt('Rza8', 'z', 'a'), 0.8),
+            ('RazN', 'a', 'z', None),
+            ('Raz0', 'a', 'z', 0),
+            ('Raz2', 'a', 'z', 0.2),
+            ('Raz4', 'a', 'z', 0.4),
+            ('Rza6', 'z', 'a', 0.6),
+            ('Rza8', 'z', 'a', 0.8),
         )
         direct_insert(testrep, data)
         ##
@@ -636,16 +656,15 @@ class SLRGetRelsTests(TestCase):
     def test_get_rels_a_eq_q_not_range(self):
         """Get relations by exact anchors and quantity range"""
         testrep = SQLiteRepo()
-        rt = testrep.reltxt
         data = (
             ('a', None),
             ('z', None),
-            (rt('RazN', 'a', 'z'), None),
-            (rt('Raz0', 'a', 'z'), 0),
-            (rt('Raz2', 'a', 'z'), 0.2),
-            (rt('Raz4', 'a', 'z'), 0.4),
-            (rt('Rza6', 'z', 'a'), 0.6),
-            (rt('Rza8', 'z', 'a'), 0.8),
+            ('RazN', 'a', 'z', None),
+            ('Raz0', 'a', 'z', 0),
+            ('Raz2', 'a', 'z', 0.2),
+            ('Raz4', 'a', 'z', 0.4),
+            ('Rza6', 'z', 'a', 0.6),
+            ('Rza8', 'z', 'a', 0.8),
         )
         direct_insert(testrep, data)
         ##
