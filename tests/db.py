@@ -19,35 +19,38 @@ Bakdoh TAGS Database Tests
 #
 # How to Use
 # ==========
-# The tests in this module are designed to test multiple repository
-# classes with a single test suite.
+# The test cases in this module are designed to test multiple repository
+# classes with minimal setup.
 #
-# Run them by subclassing these tests in a separate module. Each
-# series of tests is set up as a class. Create a subclass with
-# the RepoClass class attribute assigned to the repository class
-# to be tested.
+# Test cases can be re-run with a different repository class, with
+# the following process:
 #
-# Each series of tests require additional setup before use, please
-# see the documentation for each class for usage.
+# 1. Create a subclass of the test case classes in this module.
+#    please be aware that DBTests is not a test case; it serves
+#    as a stub and an informal specification.
+#
+# 2. Implement the methods defined in DBTests in the new
+#    subclass, for each test case. 
+#
+# 3. Place the test case subclass in a module with all the other
+#    tests where it can be discovered by Python unittest.
+#    
+# Most tests in this module are data-driven; tests are defined by test
+# data files or Python dicts. The format is at the bottom of this file.
+#
+# TODO: Find a way to eliminate the need to re-implement methods
+# for each test case
 #
 
+import builtins
 from unittest import TestCase, TestSuite
 from tags import DB, Anchor
 
-class DBGetTests(TestCase):
-    """Database tests for delete, put and set q-value
-
-    To test a repository class, please subclass this and set
-    the following:
-
-    1. RepoClass : set to the repository class being tested
-
-    2. Stub methods : override with a working implementation
-
-    """
+class DBTests(TestCase):
+    # DB test masterclass
     RepoClass = None
 
-    def direct_insert(self, repo, x):
+    def direct_insert(self, db, x):
         """Inserts anchors and relations directly via the
         repository, preferably using the lowest-level method
         feasible.
@@ -57,104 +60,1079 @@ class DBGetTests(TestCase):
 
         Argument Format
         ===============
-        * repo : repository object
+        * db: database object
 
-        * x : an iterable of anchors and/or relations
+        * x : an iterable of anchors and/or relations:
+          
+          If an element is a 2-tuple like (a, q), insert an
+          anchor 'a' with a numeric q-value of 'q'.
+
+          If an element is a 4-tuple like (n, af, at, q), insert
+          a relation named 'n', from anchor 'af' to anchor 'at',
+          with a numeric q-value of 'q'.
+
+          Elements 'a', 'af', 'at' and 'n' are strings, element 'q'
+          is an int, a float or None.
 
         """
-        raise NotImplementedError("please see DbGetTests for usage")
+        raise NotImplementedError("please see DbTests for usage")
 
-    def dump(self, repo, term=None):
-        """Load anchors directly from the repository, preferably
-        using the lowest-level method feasible.
+
+    def dump(self, db):
+        """Returns the entire contents of the repository,
+        preferably using the lowest-level method feasible.
 
         This is a stub method, please override with a working
         implementation.
 
+        Return Format
+        =============
+        Anchors and relations must be returned in a list.
+
+        * Anchors must be returned as an Anchor object
+
+        * Relations must be returned in a 4-tuple like
+          (n, afo, ato, q), where:
+
+          'n' is the name of the relation,
+
+          'afo' and 'ato' are source and destination anchors
+          (as Anchor objects),
+
+          'q' is the numeric q-value of the relation
+
         Argument Format
         ===============
-        * repo : repository object
+        * db: database object
 
         * term : Unix glob-like search term to select the anchors
           and relations to be loaded. If None, return all anchors
           and relations.
 
         """
-        raise NotImplementedError("please see DbWriteTests for usage")
+        raise NotImplementedError("please see DbTests for usage")
 
-    def setUp(self):
+    def _run_tests(self, data):
+        """
+        Runs a test defined by 'data' on a mock database, where 'data'
+        is a dict containing a test plan as shown:
+
+        TAGS Database Test Case Data Format
+        ===================================
+        This is a summary of the format used in Database test plans:
+        
+        {
+            test_0_name: {
+                 "meta": {
+                     "comments": [comment_0, ... comment_n],
+                     "descripton": {
+                         lang_0: desc_0,
+                         ...
+                         lang_n: desc_n,
+                     }
+                 },
+                 "method": method_name,
+                 "init": [anchor_0, ... anchor_n],
+                 "args_outs": [
+                     {
+                       "args": args,
+                       "exception": ex,
+                       "warning": w,
+                       "out": out,
+                       "final": final,
+                     },
+                     ...
+                 ]
+             },
+            ...
+            test_n_name: test,
+        }
+        
+        For each item in args_outs, the method nominated by 'method_name'
+        is run with arguments from 'args' on a temporary, mock database with
+        contents defined by init.
+        
+        The output of the method call is compared with 'out'. When a warning
+        or exception is expected, its type is checked against ex or w.
+       
+        The Python dict may be used in lieu of an object.
+        
+        Notes
+        =====
+        * init: Initial state of the database before each test, specified in
+          accordance to the argument format accepted by direct_insert().
+          The entire array is used as the 'x' argument.
+         
+        * args_outs: an object containing arguments in "args", and
+          expected returned values in "out", with optional warning or
+          exception.
+        
+        * "out" is the expected return values of calling 'method_name'
+            with arguments from 'args'.
+        
+        * "final" is the expected state of the whole mock database after
+          the test.
+       
+        * In "args_outs", "warning" and "exception" cannot be used together.
+          if both are present, only "exception" will be used.
+        
+        """
+        # TODO: How to port this format to ECMA-404/JSON?
+        # TODO: Support multiple successive calls per "args_outs"
+
         if not self.RepoClass: self.skipTest('No RepoClass set')
-        # TODO: find a way of skipping tests when no RepoClass
-        # is set, that doesn't bomb reports with 'skipped test'
-        # results
+            # TODO: find a way of skipping tests when no RepoClass
+            # is set, that doesn't bomb reports with 'skipped test'
+            # results
+        for test in data.keys():
+            t = data[test]
+            for c in t['args_outs']:
+                testdb = DB(self.RepoClass())
+                self.direct_insert(testdb, t['init'])
+                args = c['args']
+                ex = None
+                m = testdb.__getattribute__(t['method'])
+                wa = None
+                if 'exception' in c:
+                    ex = getattr(builtins, c.get('exception', ''))
+                elif 'warning' in c:
+                    wa = getattr(builtins, c.get('warning', ''))
+                with self.subTest(test_name=test, method=m, args=args):
+                    if ex:
+                        with self.assertRaises(ex):
+                            result = m(**args)
+                    elif wa:
+                        with self.assertWarns(ex):
+                            result = m(**args)
+                    else:
+                        result = m(**args)
+                        if 'out' in c:
+                            # PROTIP: check if 'out' matches returned value
+                            # from method call
+                            if hasattr(result, '__iter__'):
+                                self.assertEqual(list(result), c['out'])
+                            else:
+                                self.assertEqual(result, c['out'])
+                    if 'final' in c:
+                        # PROTIP: check if the final state of the mock
+                        # database is the same as defined by 'final'
+                        self.assertEqual(self.dump(testdb), c['final'])
 
-    def test_db_get_a(self):
-        testdb = DB(self.RepoClass())
-        data = (('a', None), ('z', 99))
-        self.direct_insert(testdb, data)
-        sample = testdb.get_a('*')
-        self.assertEqual(
-            list(sample), [Anchor(c, q, db=testdb) for c, q in data]
-        )
-
-class DBWriteTests(TestCase):
-    """Database tests for delete, put and set q-value
-
-    To test a repository class, please subclass this and set
-    the following:
-
-    1. RepoClass : set to the repository class being tested
-
-    2. Stub methods : override with a working implementation
+class DBGetTests(DBTests):
+    """
+    Database tests for getter methods (get_a, get_rel, ...).
+    Please see the comments at the beginning of this module for
+    usage instructions.
 
     """
-    RepoClass = None
 
-    def dump(self, repo, term=None):
-        """Load anchors directly from the repository, preferably
-        using the lowest-level method feasible.
+    def test_db_get_a(self):
+        test_data = {
+            'get_a_exact': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_a() by exact content',
+                    'comments': ['relations must not be returned']
+                    },
+                },
+                'method': 'get_a',
+                'init': (
+                    ('a', None),
+                    ('n', 1.414),
+                    ('z', 255),
+                    ('a', 'a', 'z', None),
+                    ('z', 'z', 'a', 512)
+                ),
+                'args_outs': (
+                    {'args': {'a': 'a'}, 'out': [Anchor('a', None),]},
+                    {'args': {'a': 'n'}, 'out': [Anchor('n', 1.414),]},
+                    {'args': {'a': 'z'}, 'out': [Anchor('z', 255),]},
+                ),
+            },
+            'get_a_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_a() by content wildcard',
+                    },
+                },
+                'method': 'get_a',
+                'init': (
+                    ('ababa', None),
+                    ('bbbbb', 1),
+                    ('cbabc', 2),
+                    ('cbaba', 2.5),
+                    ('daaaa', 3),
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a': 'c*'},
+                        'out': [Anchor('cbabc', 2), Anchor('cbaba', 2.5)]
+                    },
+                    {
+                        'args': {'a': '*a'},
+                        'out': [
+                            Anchor('ababa', None),
+                            Anchor('cbaba', 2.5),
+                            Anchor('daaaa', 3)
+                        ]
+                    },
+                    {
+                        'args': {'a': '*a*'},
+                        'out': [
+                            Anchor('ababa', None),
+                            Anchor('cbabc', 2),
+                            Anchor('cbaba', 2.5),
+                            Anchor('daaaa', 3)
+                        ]
+                    },
+                    {
+                        'args': {'a': 'c*a'},
+                        'out': [Anchor('cbaba', 2.5),]
+                    },
+                    {
+                        'args': {'a': '?b?b?'},
+                        'out': [
+                            Anchor('ababa', None),
+                            Anchor('bbbbb', 1),
+                            Anchor('cbabc', 2),
+                            Anchor('cbaba', 2.5),
+                        ]
+                    },
+                ),
+            },
+            'get_a_q_exact': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_a() by exact q-value',
+                    },
+                    'comments': ['relations must not be returned']
+                },
+                'method': 'get_a',
+                'init': (
+                    ('a', None),
+                    ('j', 1.414),
+                    ('t', 255),
+                    ('z', 255),
+                    ('a', 'a', 'z', None),
+                    ('j', 'z', 'a', 512)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a': '*', 'q': 255},
+                        'out': [Anchor('t', 255), Anchor('z', 255)]
+                    },
+                    {
+                        'args': {'a': '*', 'q': 1.414},
+                        'out': [Anchor('j', 1.414),]
+                    }
+                ),
+            },
+            'get_a_q_zerovsnone': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_a() anchors with a value of 0',
+                    },
+                    'comments': [
+                        'relations must not be returned',
+                        'zero is different from None',
+                    ]
+                },
+                'method': 'get_a',
+                'init': (
+                    ('a', None),
+                    ('n', 0),
+                    ('z', 0),
+                    ('a', 'a', 'z', None),
+                    ('z', 'z', 'a', 512)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a': '*', 'q': 0},
+                        'out': [Anchor('n', 0), Anchor('z', 0)]
+                    },
+                ),
+            },
+            'get_a_q_range': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_a() by q value range',
+                    },
+                },
+                'method': 'get_a',
+                'init': (('a', 10), ('n', 20), ('z', 30),),
+                'args_outs': (
+                    {
+                        'args': {'a': '*', 'q_gt': 20},
+                        'out': [Anchor('z', 30),]
+                    },
+                    {
+                        'args': {'a': '*', 'q_lt': 20},
+                        'out': [Anchor('a', 10),]
+                    },
+                    {
+                        'args': {'a': '*', 'q_gte': 20},
+                        'out': [Anchor('n', 20), Anchor('z', 30),]
+                    },
+                    {
+                        'args': {'a': '*', 'q_lte': 20},
+                        'out': [Anchor('a', 10), Anchor('n', 20),]
+                    },
+                ),
+            },
+            'get_a_q_not_range': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_a() by negated q value or range',
+                    },
+                },
+                'method': 'get_a',
+                'init': (
+                    ('a', -10),
+                    ('g', -5),
+                    ('m', 5),
+                    ('s', 10),
+                    ('z', None)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a': '*', 'q': -5, 'q_not': True},
+                        'out': [
+                            Anchor('a', -10),
+                            Anchor('m', 5),
+                            Anchor('s', 10)
+                        ],
+                    },
+                    {
+                        'args': {'a': '*', 'q_gt': 5, 'q_not': True},
+                        'out': [
+                            Anchor('a', -10),
+                            Anchor('g', -5),
+                            Anchor('m', 5),
+                        ],
+                    },
+                    {
+                        'args': {'a': '*', 'q_lt': -5, 'q_not': True},
+                        'out': [
+                            Anchor('g', -5),
+                            Anchor('m', 5),
+                            Anchor('s', 10),
+                        ],
+                    },
+                    {
+                        'args': {
+                            'a': '*', 'q_lt': -5, 'q_gt': 5, 'q_not': True
+                        },
+                        'out': [Anchor('g', -5), Anchor('m', 5),],
+                    },
+                    {
+                        'args': {
+                            'a': '*', 'q_lte': -5, 'q_gte': 5, 'q_not': True
+                        },
+                        'out': []
+                    },
+                    {
+                        'args': {
+                            'a': '*', 'q_lt': -5, 'q_gt': 5, 'q_not': True
+                        },
+                        'out': [Anchor('g', -5), Anchor('m', 5),],
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
 
-        THIS IS A STUB METHOD, PLEASE OVERRIDE WITH A WORKING
-        implementation.
+    def test_db_get_rels(self):
+        test_data = {
+            'get_rels_exact': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_rels() by name or anchor content',
+                    'comments': ['anchors must not be returned']
+                    },
+                },
+                'method': 'get_rels',
+                'init': (
+                    ('a', 0),
+                    ('n', 0),
+                    ('a', 'a', 'n', None),
+                    ('n', 'n', 'a', 2),
+                    ('z', 'n', 'a', 3)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'name': 'a'},
+                        'out': [('a', Anchor('a', 0), Anchor('n', 0), None),]
+                    },
+                    {
+                        'args': {'name': 'z'},
+                        'out': [('z', Anchor('n', 0), Anchor('a', 0), 3),]
+                    },
+                    {
+                        'args': {'a_from': 'n'},
+                        'out': [
+                            ('n', Anchor('n', 0), Anchor('a', 0), 2),
+                            ('z', Anchor('n', 0), Anchor('a', 0), 3),
+                        ]
+                    },
+                ),
+            },
+            'get_rels_a_q_range': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_rels() by anchor content, q range',
+                    'comments': ['anchors must not be returned']
+                    },
+                },
+                'method': 'get_rels',
+                'init': (
+                    ('a', 0),
+                    ('z', 1),
+                    ('rN', 'a', 'z', None),
+                    ('r0', 'a', 'z', 0),
+                    ('r2', 'a', 'z', 2),
+                    ('r4', 'a', 'z', 4),
+                    ('r6', 'z', 'a', 6),
+                    ('r8', 'z', 'a', 8)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a_from': 'a', 'a_to': 'z', 'q_gt': 1},
+                        'out': [
+                            ('r2', Anchor('a', 0), Anchor('z', 1), 2),
+                            ('r4', Anchor('a', 0), Anchor('z', 1), 4),
+                        ]
+                    },
+                    {
+                        'args': {
+                            'a_from': 'a',
+                            'a_to': 'z',
+                            'q_gt': 1,
+                            'q_not': True
+                        },
+                        'out': [
+                            ('r0', Anchor('a', 0), Anchor('z', 1), 0),
+                        ]
+                    },
+                    {
+                        'args': {
+                            'a_from': 'a',
+                            'a_to': 'z',
+                            'q_lt': 1,
+                            'q_not': True
+                        },
+                        'out': [
+                            ('r2', Anchor('a', 0), Anchor('z', 1), 2),
+                            ('r4', Anchor('a', 0), Anchor('z', 1), 4),
+                        ]
+                    },
+                    {
+                        'args': {
+                            'a_from': 'a',
+                            'a_to': 'z',
+                            'q_lte': 8,
+                            'q_not': True
+                        },
+                        'out': []
+                    },
+                    {
+                        'args': {'a_from': 'a', 'a_to': 'z', 'q_lt': 4},
+                        'out': [
+                            ('r0', Anchor('a', 0), Anchor('z', 1), 0),
+                            ('r2', Anchor('a', 0), Anchor('z', 1), 2),
+                        ]
+                    },
+                    {
+                        'args': {'a_from': 'z', 'a_to': 'a', 'q_lte': 8},
+                        'out': [
+                            ('r6', Anchor('z', 1), Anchor('a', 0), 6),
+                            ('r8', Anchor('z', 1), Anchor('a', 0), 8),
+                        ]
+                    },
+                ),
+            },
+            'get_rels_name_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'get_rels() by name wildcard',
+                    'comments': ['anchors must not be returned']
+                    },
+                },
+                'method': 'get_rels',
+                'init': (
+                    ('aaaa', 1),
+                    ('jwqa', 2),
+                    ('tqqz', 3),
+                    ('zwwz', 4),
+                    ('aaaa', 'aaaa', 'zwwz', 1),
+                    ('jwqa', 'jwqa', 'aaaa', 2),
+                    ('tqqz', 'tqqz', 'jwqa', 3),
+                    ('zwwz', 'zwwz', 'tqqz', 4)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'name': '*a'},
+                        'out': [
+                            ('aaaa', Anchor('aaaa',1), Anchor('zwwz',4), 1),
+                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2)
+                        ]
+                    },
+                    {
+                        'args': {'name': '*q*'},
+                        'out': [
+                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2),
+                            ('tqqz', Anchor('tqqz',3), Anchor('jwqa',2), 3)
+                        ]
+                    },
+                    {
+                        'args': {'name': '?w??'},
+                        'out': [
+                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2),
+                            ('zwwz', Anchor('zwwz',4), Anchor('tqqz',3), 4)
+                        ]
+                    },
+                    {
+                        'args': {'name': 'z*'},
+                        'out': [
+                            ('zwwz', Anchor('zwwz',4), Anchor('tqqz',3), 4)
+                        ]
+                    },
+                    {
+                        'args': {'a_from': '*a'},
+                        'out': [
+                            ('aaaa', Anchor('aaaa',1), Anchor('zwwz',4), 1),
+                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2)
+                        ]
+                    },
+                    {
+                        'args': {'a_to': '*z'},
+                        'out': [
+                            ('aaaa', Anchor('aaaa',1), Anchor('zwwz',4), 1),
+                            ('zwwz', Anchor('zwwz',4), Anchor('tqqz',3), 4)
+                        ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
 
-        Argument Format
-        ===============
-        * repo : repository object
+class DBWriteTests(DBTests):
+    """Database tests for delete, put and set q-value
+    Please see the comments at the beginning of this module for
+    usage instructions.
 
-        * term : Unix glob-like search term to select the anchors
-          and relations to be loaded. If None, return all anchors
-          and relations.
+    """
+    def test_db_delete_a(self):
+        """delete_a(): Delete anchors"""
 
-        """
-        raise NotImplementedError("please see DbWriteTests for usage")
+        test_data = {
+            'delete_a_exact': {
+                'meta': {
+                    'description': {
+                        'en-au': 'delete_a() by exact content',
+                    },
+                },
+                'method': 'delete_a',
+                'init': (('a', None), ('n', None), ('z', None),),
+                'args_outs': (
+                    {
+                        'args': {'a': 'a'},
+                        'final': [Anchor('n', None), Anchor('z', None)]
+                    },
+                ),
+            },
+            'delete_a_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'delete_a() by wildcards',
+                    },
+                },
+                'method': 'delete_a',
+                'init': (
+                    ('aaaa', None),
+                    ('azzz', None),
+                    ('bzzi', None),
+                    ('vzzi', None),
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a': 'a*'},
+                        'final': [Anchor('bzzi', None), Anchor('vzzi', None)]
+                    },
+                    {
+                        'args': {'a': '*z*'},
+                        'final': [Anchor('aaaa', None),]
+                    },
+                    {
+                        'args': {'a': '*i'},
+                        'final': [Anchor('aaaa', None), Anchor('azzz', None)]
+                    },
+                    {
+                        'args': {'a': '?z?i'},
+                        'final': [Anchor('aaaa', None), Anchor('azzz', None)]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
 
-    def setUp(self):
-        # TODO: find a way of skipping tests when no RepoClass
-        # is set, that doesn't bomb reports with 'skipped test'
-        # results
-        if not self.RepoClass: self.skipTest('No RepoClass set')
+    def test_db_incr_a_q(self):
+        """incr_a_q(): Increment anchor q value"""
+
+        test_data = {
+            'incr_a_q': {
+                'meta': {
+                    'description': {
+                        'en-au': 'incr_a_q() specific anchor',
+                    },
+                },
+                'method': 'incr_a_q',
+                'init': (('a', 0),),
+                'args_outs': (
+                    {
+                        'args': {'a': 'a', 'd': -10},
+                        'final': [Anchor('a', -10),]
+                    },
+                    {
+                        'args': {'a': 'a', 'd': 10},
+                        'final': [Anchor('a', 10),]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
 
     def test_db_put_a(self):
-        """
-        Insert ordinary anchors
+        """put_a(): Insert anchors"""
+
+        test_data = {
+            'put_a': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_a() without q',
+                    },
+                },
+                'method': 'put_a',
+                'init': (),
+                'args_outs': (
+                    {
+                        'args': {'a': 'a'},
+                        'final': [Anchor('a', None),]
+                    },
+                ),
+            },
+            'put_a_q': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_a() with q',
+                    },
+                },
+                'method': 'put_a',
+                'init': (),
+                'args_outs': (
+                    {
+                        'args': {'a': 'a', 'q': 1.414},
+                        'final': [Anchor('a', 1.414),]
+                    },
+                    {
+                        'args': {'a': 'a', 'q': 1},
+                        'final': [Anchor('a', 1),]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
+
+    def test_db_put_a_invalid(self):
+        """put_a(): Handling invalid or malformed anchors"""
+
+        test_data = {
+            'put_a_non_num_q': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_a() with non-numeric q',
+                    },
+                },
+                'method': 'put_a',
+                'init': (),
+                'args_outs': (
+                    {
+                        'args': {'a': 'a', 'q': 'VALUE'},
+                        'exception': 'TypeError',
+                        'final': []
+                    },
+                    {
+                        'args': {'a': 'a', 'q': (1,10,100)},
+                        'exception': 'TypeError',
+                        'final': []
+                    },
+                ),
+            },
+            'put_a_nothing': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_a(): empty string anchor',
+                    },
+                },
+                'method': 'put_a',
+                'init': (),
+                'args_outs': (
+                    {
+                        'args': {'a': '',},
+                        'exception': 'ValueError',
+                        'final': []
+                    },
+                ),
+            }
+        }
+        self._run_tests(test_data)
+
+    def test_db_set_a_q(self):
+        """set_rel_q: set anchor q-value"""
+        test_data = {
+            'set_a_q': {
+                'meta': {
+                    'description': {
+                        'en-au': 'set_rel_q() on specific relation',
+                    },
+                    'comment': ['relations must be left unchanged'],
+                },
+                'method': 'set_a_q',
+                'init': (('a', 1), ('z', None), ('z', 'a', 'z', 0)),
+                'args_outs': (
+                    {
+                        'args': {'s': 'z', 'q': 2},
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('z', Anchor('a', 1), Anchor('z', 2), 0)
+                        ]
+                    },
+                    {
+                        'args': {'s': 'z', 'q': -2},
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', -2),
+                            ('z', Anchor('a', 1), Anchor('z', -2), 0)
+                        ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
+
+    def test_db_delete_rel(self):
+        """delete_rels(): Delete relations"""
+
+        test_data = {
+            'delete_rels': {
+                'meta': {
+                    'description': {
+                        'en-au': 'delete_rels() by anchor content',
+                    },
+                    'comments': ['anchors must be left intact',],
+                },
+                'method': 'delete_rels',
+                'init': (
+                    ('a', 1),
+                    ('z', 2),
+                    ('Rza0', 88),
+                    ('Rza1', 99),
+                    ('Raz0', 'a', 'z', 0),
+                    ('Raz1', 'a', 'z', 1),
+                    ('Rza0', 'z', 'a', 0),
+                    ('Rza1', 'z', 'a', 1),
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a_from': 'a'},
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            Anchor('Rza0', 88),
+                            Anchor('Rza1', 99),
+                            ('Rza0', Anchor('z', 2), Anchor('a', 1), 0),
+                            ('Rza1', Anchor('z', 2), Anchor('a', 1), 1)
+                        ]
+                    },
+                    {
+                        'args': {'a_to': 'a'},
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            Anchor('Rza0', 88),
+                            Anchor('Rza1', 99),
+                            ('Raz0', Anchor('a', 1), Anchor('z', 2), 0),
+                            ('Raz1', Anchor('a', 1), Anchor('z', 2), 1)
+                        ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
+
+    def test_db_incr_rel_q(self):
+        """incr_rel_q: increment relation q-value"""
+        test_data = {
+            'incr_rel_q': {
+                'meta': {
+                    'description': {
+                        'en-au': 'incr_rel_q() on specific relation',
+                    },
+                    'comments': ['anchors must be left untouched'],
+                },
+                'method': 'incr_rel_q',
+                'init': (('a', 1), ('z', 2), ('z', 'a', 'z', 0)),
+                'args_outs': (
+                    {
+                        'args': {
+                            'name': 'z', 'a_from':'a', 'a_to':'z', 'd': 10
+                        },
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('z', Anchor('a', 1), Anchor('z', 2), 10)
+                        ]
+                    },
+                    {
+                        'args': {
+                            'name': 'z', 'a_from':'a', 'a_to':'z', 'd': -10
+                        },
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('z', Anchor('a', 1), Anchor('z', 2), -10)
+                        ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
+
+    def test_db_put_rel(self):
+        """put_rel(): Link anchors with relations"""
+
+        test_data = {
+            'put_rel': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_rel() by exact anchor content',
+                    },
+                },
+                'method': 'put_rel',
+                'init': (('a', 1), ('z', 2)),
+                'args_outs': (
+                    {
+                        'args': {'rel': 'Raz', 'a_from':'a', 'a_to':'z'},
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('Raz', Anchor('a', 1), Anchor('z', 2), None)
+                        ]
+                    },
+                    {
+                        'args': {
+                            'rel': 'Raz', 'a_from':'a', 'a_to':'z', 'q': 12
+                        },
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('Raz', Anchor('a', 1), Anchor('z', 2), 12)
+                        ]
+                    },
+                    {
+                        'args': {
+                            'rel': 'Raz', 'a_from':'a', 'a_to':'z', 'q': 1.2
+                        },
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('Raz', Anchor('a', 1), Anchor('z', 2), 1.2)
+                        ]
+                    },
+                ),
+            },
+            'put_rel_multi': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_rel(): multi rels between same anchors',
+                    },
+                },
+                'method': 'put_rel',
+                'init': (
+                    ('a', 1),
+                    ('z', 2),
+                    ('R0', 'a', 'z', None),
+                    ('R1', 'z', 'a', None)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'rel': 'R2', 'a_from':'a', 'a_to':'z', 'q':4},
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('R0', Anchor('a', 1), Anchor('z', 2), None),
+                            ('R1', Anchor('z', 2), Anchor('a', 1), None),
+                            ('R2', Anchor('a', 1), Anchor('z', 2), 4)
+                        ]
+                    },
+                    {
+                        'args': {'rel': 'R3', 'a_from':'z', 'a_to':'a', 'q':8},
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('R0', Anchor('a', 1), Anchor('z', 2), None),
+                            ('R1', Anchor('z', 2), Anchor('a', 1), None),
+                            ('R3', Anchor('z', 2), Anchor('a', 1), 8)
+                        ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
+
+    def test_db_put_rel_invalid(self):
+        """put_rel(): handling of invalid and malformed relations
+
+        Invalid relations must not be created
 
         """
-        testdb = DB(self.RepoClass())
-        data = [('a', 1), ('z', 99)]
-        for d in data:
-            testdb.put_a(*d)
-        sample = self.dump(testdb)
-        self.assertEqual(sample, data)
+        test_data = {
+            'put_rel_non_num_q': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_rel() with non-numerical q',
+                    },
+                },
+                'method': 'put_rel',
+                'init': (('a', 1), ('z', 2)),
+                'args_outs': (
+                    {
+                        'args': {
+                            'rel':'r', 'a_from':'a', 'a_to':'z', 'q':':('
+                        },
+                        'exception': 'TypeError',
+                        'final': [Anchor('a', 1), Anchor('z', 2),]
+                    },
+                ),
+            },
+            'put_rel_duplicate': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_rel(): duplicate relations',
+                    },
+                },
+                'method': 'put_rel',
+                'init': (
+                    ('a', 1), ('z', 2), ('r', 'a', 'z', None),
+                ),
+                'args_outs': (
+                    {
+                        'args': {'rel':'r', 'a_from':'a', 'a_to':'z'},
+                        'exception': 'ValueError',
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('r', Anchor('a', 1), Anchor('z', 2), None)
+                        ]
+                    },
+                    {
+                        'args': {'rel':'r', 'a_from':'a', 'a_to':'z', 'q': 99},
+                        'exception': 'ValueError',
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('r', Anchor('a', 1), Anchor('z', 2), None)
+                        ]
+                    },
+                ),
+            },
+            'put_rel_self_link': {
+                'meta': {
+                    'description': {
+                        'en-au': 'put_rel(): self-linking relations',
+                    },
+                },
+                'method': 'put_rel',
+                'init': (
+                    ('a', 1),
+                ),
+                'args_outs': (
+                    {
+                        'args': {'rel':'r', 'a_from':'a', 'a_to':'a'},
+                        'exception': 'ValueError',
+                        'final': [
+                            Anchor('a', 1),
+                        ]
+                    },
+                    {
+                        'args': {'rel':'r', 'a_from':'a', 'a_to':'a', 'q': 99},
+                        'exception': 'ValueError',
+                        'final': [
+                            Anchor('a', 1),
+                        ]
+                    },
+                ),
+            }
+        }
+        self._run_tests(test_data)
 
-    def test_db_put_a_nothing(self):
-        """
-        Handle attempts to insert empty string anchors
+    def test_db_set_rel_q(self):
+        """set_rel_q: set relation q-value"""
+        test_data = {
+            'set_rel_q': {
+                'meta': {
+                    'description': {
+                        'en-au': 'set_rel_q() on specific relation',
+                    },
+                    'comment': ['anchors must be left unchanged'],
+                },
+                'method': 'set_rel_q',
+                'init': (('a', 1), ('z', 2), ('z', 'a', 'z', None)),
+                'args_outs': (
+                    {
+                        'args': {
+                            'name': 'z', 'a_from':'a', 'a_to':'z', 'q': 2
+                        },
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('z', Anchor('a', 1), Anchor('z', 2), 2)
+                        ]
+                    },
+                    {
+                        'args': {
+                            'name': 'z', 'a_from':'a', 'a_to':'z', 'q': -2
+                        },
+                        'final': [
+                            Anchor('a', 1),
+                            Anchor('z', 2),
+                            ('z', Anchor('a', 1), Anchor('z', 2), -2)
+                        ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
 
-        """
-        testdb = DB(self.RepoClass())
-        with self.assertRaises(ValueError):
-            testdb.put_a('', None)
-        ##
-        sample = self.dump(testdb)
-        self.assertEqual(sample, [])
+    def test_self_test_run_tests(self):
+        test_data = {
+            '_run_tests_with_ex': {
+                'meta': {
+                    'comments': ['delete_rels() cannot be used without args'],
+                    'description': {
+                        'en-au': 'test _run_test() exceptions',
+                    },
+                },
+                'method': 'delete_rels',
+                'init': (('a', 1), ('z', 2)),
+                'args_outs': (
+                    {
+                        'args': {},
+                        'exception': 'ValueError',
+                        'final': [ Anchor('a', 1), Anchor('z', 2), ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
 

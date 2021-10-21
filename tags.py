@@ -58,12 +58,12 @@ def uesc_dict(d):
 class Anchor:
     # Anchor (graph node) class. Includes navigation methods.
     def __init__(self, content, q=None, **kwargs):
-        # kwargs accepted: get_q (bool), db
+        # kwargs accepted: db
         self.db = kwargs.get('db')
         self.content = content
         self.q = q
-        if kwargs.get('get_q', True) and self.q is None:
-            self.get_q()
+        do_get_q = (self.db is not None) and (q is None)
+        if do_get_q: self.get_q()
 
     def __eq__(self, other):
         """Anchor comparison: two Anchors are of equal value when
@@ -120,9 +120,9 @@ class DB:
         # for details on how to create or load databases
         self.repo = repo
 
-    def delete_a(self, s, **kwargs):
+    def delete_a(self, a, **kwargs):
         """
-        Delete anchors matching 's'.
+        Delete anchors matching 'a'.
 
         Accepts the same arguments and wildcard syntax as get_rels(),
         please see the documentation for that method for details.
@@ -363,7 +363,7 @@ class DB:
         """
         # TODO: returning information about the anchor/relation
         # from invoking put_rel() or put_a() may be helpful
-        self.repo.put_rel(rel, a_from, a_to)
+        self.repo.put_rel(rel, a_from, a_to, q=q)
 
     def set_a_q(self, s, q):
         """
@@ -777,6 +777,9 @@ class SQLiteRepo:
         # NOTE: The 'e' suffix in the argument names means that
         # the argument is 'expected to be already escaped'
         #
+        # TODO: remove support for aliased relations, and swap with
+        # verbose<==>aliased converter?
+        #
         af = a1e
         at = a2e
         if alias == 'local':
@@ -843,6 +846,8 @@ class SQLiteRepo:
         for usage.
 
         """
+        # TODO: Allow delete by quantity or quantity range?
+
         sc_delete = "DELETE FROM {} ".format(self.table_a)
         sc = "".join((sc_delete, self._slr_a_where_clause()))
         cs = self._slr_get_cursor()
@@ -928,6 +933,8 @@ class SQLiteRepo:
         for usage.
 
         """
+        # TODO: Allow delete by quantity or quantity range?
+
         a_to = kwargs.get('a_to')
         a_from = kwargs.get('a_from')
         if a_to is None and a_from is None:
