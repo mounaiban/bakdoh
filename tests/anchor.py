@@ -21,7 +21,7 @@ Bakdoh TAGS Non-Database-Bound Anchor Object Tests
 # ====
 # Database-bound tests (which rely on a database repository)
 # are found in the tests.db module, and are run with the repository
-# tests in tests.tests_tags
+# tests in the tests.tests_tags* modules
 #
 
 from tags import Anchor
@@ -34,7 +34,7 @@ class AnchorTests(TestCase):
         a2 = Anchor('a', 0)
         self.assertEqual(a1, a2)
     
-    def test_eq_not_equal(self):
+    def test_eq_different_values(self):
         a1 = Anchor('a', 0)
         a3 = Anchor('a', 100)   # different content
         a4 = Anchor('z', 0)     # different q
@@ -42,4 +42,11 @@ class AnchorTests(TestCase):
         self.assertNotEqual(a1, a3)
         self.assertNotEqual(a1, a4)
         self.assertNotEqual(a1, a5)
+
+    def test_eq_different_types(self):
+        a = Anchor('a', 0)
+        self.assertNotEqual(a, 1)
+        self.assertNotEqual(a, ('not', 'equal'))
+        self.assertNotEqual(a, ['not', 'equal'])
+        self.assertNotEqual(a, 'not equal')
 

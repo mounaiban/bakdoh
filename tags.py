@@ -70,6 +70,7 @@ class Anchor:
         both content and q are of equal value
 
         """
+        if type(other) != type(self): return False
         return (self.q == other.q) and (self.content == other.content)
 
     def __repr__(self):
