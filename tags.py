@@ -129,6 +129,16 @@ class DB:
             except KeyError:
                 pass
 
+    def _ck_strargs_not_empty(self, ck_args=('a', 'a_from', 'a_to'), **kwargs):
+        for a in kwargs:
+            if a in ck_args:
+                if type(a) is not str:
+                    raise TypeError('argument {} must be string').format(a)
+                elif not kwargs[a]:
+                    raise ValueError(
+                        'argument {} cannot be empty string'.format(a)
+                    )
+
     def delete_a(self, a, **kwargs):
         """
         Delete anchors matching 'a'.
@@ -360,6 +370,7 @@ class DB:
         per database.
 
         """
+        self._ck_strargs_not_empty(a=a)
         self.repo.put_a(a, q)
 
     def put_rel(self, rel, a_from, a_to, q=None):
@@ -374,6 +385,12 @@ class DB:
         """
         # TODO: returning information about the anchor/relation
         # from invoking put_rel() or put_a() may be helpful
+        self._ck_strargs_not_empty(
+            ck_args=('rel', 'a_from', 'a_to'),
+            rel = rel,
+            a_from = a_from,
+            a_to = a_to
+        )
         self.repo.put_rel(rel, a_from, a_to, q=q)
 
     def set_a_q(self, s, q):

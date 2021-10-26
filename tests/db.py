@@ -1015,6 +1015,35 @@ class DBWriteTests(DBTests):
                     },
                 ),
             },
+            'put_rel_nothing': {
+                'meta': {
+                    'description': 'put_rel(): with empty strings',
+                },
+                'method': 'put_rel',
+                'init': (('a', None), ('z', None)),
+                'args_outs': (
+                    {
+                        'args': {'rel': '', 'a_from': 'a', 'a_to': 'z'},
+                        'exception': 'ValueError',
+                        'final': [Anchor('a', None), Anchor('z', None)],
+                    },
+                    {
+                        'args': {'rel': 'r', 'a_from': '', 'a_to': 'z'},
+                        'exception': 'ValueError',
+                        'final': [Anchor('a', None), Anchor('z', None)],
+                    },
+                    {
+                        'args': {'rel': 'r', 'a_from': 'a', 'a_to': ''},
+                        'exception': 'ValueError',
+                        'final': [Anchor('a', None), Anchor('z', None)],
+                    },
+                    {
+                        'args': {'rel': 'r', 'a_from': '', 'a_to': ''},
+                        'exception': 'ValueError',
+                        'final': [Anchor('a', None), Anchor('z', None)],
+                    },
+                ),
+            },
             'put_rel_duplicate': {
                 'meta': {
                     'description': {
