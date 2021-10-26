@@ -121,13 +121,11 @@ class DB:
         # for details on how to create or load databases
         self.repo = repo
 
-    def _ck_q_isnum(self, ck_args=('q','d'), **kwargs):
-        for a in ck_args:
-            try:
+    def _ck_args_isnum(self, ck_args=('q','d'), **kwargs):
+        for a in kwargs:
+            if a in ck_args:
                 if type(kwargs[a]) not in (int, float):
                     raise TypeError('argument {} must be a number'.format(a))
-            except KeyError:
-                pass
 
     def _ck_strargs_not_empty(self, ck_args=('a', 'a_from', 'a_to'), **kwargs):
         for a in kwargs:
@@ -346,7 +344,7 @@ class DB:
         has no effect.
 
         """
-        self._ck_q_isnum(d=d)
+        self._ck_args_isnum(d=d)
         self.repo.incr_a_q(a, d)
 
     def incr_rel_q(self, name, a_from, a_to, d):
@@ -358,7 +356,7 @@ class DB:
         no effect.
 
         """
-        self._ck_q_isnum(d=d)
+        self._ck_args_isnum(d=d)
         self.repo.incr_rel_q(name, a_from, a_to, d)
 
     def put_a(self, a, q=None):
@@ -398,7 +396,7 @@ class DB:
         Assign a numerical quantity q to an anchor 's'.
 
         """
-        self._ck_q_isnum(q=q)
+        self._ck_args_isnum(q=q)
         self.repo.set_a_q(s, q)
 
     def set_rel_q(self, name, a_from, a_to, q):
@@ -407,7 +405,7 @@ class DB:
         a_from and a_to.
 
         """
-        self._ck_q_isnum(q=q)
+        self._ck_args_isnum(q=q)
         self.repo.set_rel_q(name, a_from, a_to, q)
 
 class SQLiteRepo:
