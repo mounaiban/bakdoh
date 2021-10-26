@@ -121,6 +121,14 @@ class DB:
         # for details on how to create or load databases
         self.repo = repo
 
+    def _ck_q_isnum(self, ck_args=('q','d'), **kwargs):
+        for a in ck_args:
+            try:
+                if type(kwargs[a]) not in (int, float):
+                    raise TypeError('argument {} must be a number'.format(a))
+            except KeyError:
+                pass
+
     def delete_a(self, a, **kwargs):
         """
         Delete anchors matching 'a'.
@@ -328,6 +336,7 @@ class DB:
         has no effect.
 
         """
+        self._ck_q_isnum(d=d)
         self.repo.incr_a_q(a, d)
 
     def incr_rel_q(self, name, a_from, a_to, d):
@@ -339,6 +348,7 @@ class DB:
         no effect.
 
         """
+        self._ck_q_isnum(d=d)
         self.repo.incr_rel_q(name, a_from, a_to, d)
 
     def put_a(self, a, q=None):
@@ -371,6 +381,7 @@ class DB:
         Assign a numerical quantity q to an anchor 's'.
 
         """
+        self._ck_q_isnum(q=q)
         self.repo.set_a_q(s, q)
 
     def set_rel_q(self, name, a_from, a_to, q):
@@ -379,6 +390,7 @@ class DB:
         a_from and a_to.
 
         """
+        self._ck_q_isnum(q=q)
         self.repo.set_rel_q(name, a_from, a_to, q)
 
 class SQLiteRepo:
@@ -456,14 +468,6 @@ class SQLiteRepo:
         except sqlite3.OperationalError as x:
             if 'no such table' in x.args[0]:
                 self._slr_create_tables()
-
-    def _ck_q_isnum(self, ck_args=('q','d'), **kwargs):
-        for a in ck_args:
-            try:
-                if type(kwargs[a]) not in (int, float):
-                    raise TypeError('argument {a} must be a number')
-            except KeyError:
-                pass
 
     def _prep_term(self, term):
         """
@@ -701,7 +705,6 @@ class SQLiteRepo:
         params = []
         ub = None  # upper bound
         ub_expr = ""
-        self._ck_q_isnum(ck_args=self.num_q_args, **kwargs)
         if 'q' in kwargs:
             # exact
             lbe = kwargs['q']
@@ -819,8 +822,8 @@ class SQLiteRepo:
         )
 
     def put_a(self, a, q=None):
-        """
-        Put an anchor a with optional numerical quantity value q.
+        """ Handle DB request to put an anchor into the SQLite
+        backing store
 
         """
         self._slr_insert_into_a(self._prep_a(a), q)
@@ -830,7 +833,6 @@ class SQLiteRepo:
         anchor. Called from DB.set_a_q()
 
         """
-        self._ck_q_isnum(q=q)
         self._slr_set_q(self._prep_a(a), q)
 
     def incr_a_q(self, a, d):
@@ -838,7 +840,6 @@ class SQLiteRepo:
         quantity of an anchor. Called from DB.incr_a_q()
 
         """
-        self._ck_q_isnum(d=d)
         self._slr_incr_q(self._prep_a(a), d)
 
     def delete_a(self, a):
@@ -898,15 +899,10 @@ class SQLiteRepo:
         'a_to'. Called from DB.set_rel_q()
 
         """
-        ck_fns = (
-            self._slr_ck_anchors_exist,
-            self._ck_q_isnum,
-        )
         ae_from = self._prep_a(a_from)
         ae_to = self._prep_a(a_to)
         namee = self._prep_a(name)
-        for f in ck_fns:
-            f(namee=namee, a1e=ae_from, a2e=ae_to, q=q)
+        self._slr_ck_anchors_exist(namee=namee, a1e=ae_from, a2e=ae_to, q=q)
         term = self.reltxt(name, ae_from, ae_to)
         self._slr_set_q(term, q)
 
@@ -916,15 +912,10 @@ class SQLiteRepo:
         'a_from' to 'a_to'. Called from DB.incr_rel_q()
 
         """
-        ck_fns = (
-            self._slr_ck_anchors_exist,
-            self._ck_q_isnum,
-        )
         ae_from = self._prep_a(a_from)
         ae_to = self._prep_a(a_to)
         namee = self._prep_a(name)
-        for f in ck_fns:
-            f(namee=namee, a1e=ae_from, a2e=ae_to, d=d)
+        self._slr_ck_anchors_exist(namee=namee, a1e=ae_from, a2e=ae_to, d=d)
         term = self.reltxt(name, ae_from, ae_to)
         self._slr_incr_q(term, d)
 
