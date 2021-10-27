@@ -335,7 +335,7 @@ class DB:
             for n, f, t, q in self.repo.get_rels(**kwargs)
         )
 
-    def incr_a_q(self, a, d):
+    def incr_a_q(self, a, d, **kwargs):
         """
         Increment or decrement a quantity assigned to anchor 'a'
         by d. When d<0, the quantity is decreased.
@@ -345,7 +345,7 @@ class DB:
 
         """
         self._ck_args_isnum(d=d)
-        self.repo.incr_a_q(a, d)
+        self.repo.incr_a_q(a, d, **kwargs)
 
     def incr_rel_q(self, name, a_from, a_to, d):
         """
@@ -396,6 +396,10 @@ class DB:
         Assign a numerical quantity q to an anchor 's'.
 
         """
+        # TODO: q values cannot be set by existing quantity,
+        # because both q value selection and specification
+        # are based on the argument name 'q'. The API has to
+        # be revised with names that tell the two apart.
         self._ck_args_isnum(q=q)
         self.repo.set_a_q(s, q)
 
@@ -575,19 +579,24 @@ class SQLiteRepo:
         cs = self._slr_get_cursor()
         cs.execute(sc)
 
-    def _slr_set_q(self, ae, q):
+    def _slr_set_q(self, ae, q, is_rel=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
         sc_up = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
-        sc = "".join((sc_up, self._slr_a_where_clause(is_rel=True)))
+        sc = "".join((sc_up, self._slr_a_where_clause(is_rel=is_rel)))
         cus = self._slr_get_cursor()
         cus.execute(sc, (q, ae))
         self._db_conn.commit()
 
-    def _slr_incr_q(self, ae, d):
+    def _slr_incr_q(self, ae, d, is_rel=False, **kwargs):
         sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.table_a, self.col_q)
-        sc = "".join((sc_incr, self._slr_a_where_clause(is_rel=True)))
+        sc = "".join((sc_incr, self._slr_a_where_clause(is_rel=is_rel)))
+        params = [d, ae]
+        if kwargs:
+            sc_q, qparams = self._slr_q_clause(**kwargs)
+            sc = "".join((sc, sc_q))
+            params.extend(qparams)
         cus = self._slr_get_cursor()
-        cus.execute(sc, (d, ae))
+        cus.execute(sc, params)
         self._db_conn.commit()
 
     def _slr_get_a(self, ae, **kwargs):
@@ -837,25 +846,25 @@ class SQLiteRepo:
         )
 
     def put_a(self, a, q=None):
-        """ Handle DB request to put an anchor into the SQLite
+        """Handle DB request to put an anchor into the SQLite
         backing store
 
         """
         self._slr_insert_into_a(self._prep_a(a), q)
 
-    def set_a_q(self, a, q):
+    def set_a_q(self, a, q, **kwargs):
         """Handle DB request to assign a numerical quantity to an
         anchor. Called from DB.set_a_q()
 
         """
-        self._slr_set_q(self._prep_a(a), q)
+        self._slr_set_q(self._prep_term(a), q, **kwargs)
 
-    def incr_a_q(self, a, d):
+    def incr_a_q(self, a, d, **kwargs):
         """Handle DB request to increment/decrement a numerical
         quantity of an anchor. Called from DB.incr_a_q()
 
         """
-        self._slr_incr_q(self._prep_a(a), d)
+        self._slr_incr_q(self._prep_term(a), d, **kwargs)
 
     def delete_a(self, a):
         """Handle DB request to delete anchors. Accepts the same arguments
@@ -919,7 +928,7 @@ class SQLiteRepo:
         namee = self._prep_a(name)
         self._slr_ck_anchors_exist(namee=namee, a1e=ae_from, a2e=ae_to, q=q)
         term = self.reltxt(name, ae_from, ae_to)
-        self._slr_set_q(term, q)
+        self._slr_set_q(term, q, is_rel=True)
 
     def incr_rel_q(self, name, a_from, a_to, d):
         """Handle DB request to increment/decrement the numerical
@@ -932,7 +941,7 @@ class SQLiteRepo:
         namee = self._prep_a(name)
         self._slr_ck_anchors_exist(namee=namee, a1e=ae_from, a2e=ae_to, d=d)
         term = self.reltxt(name, ae_from, ae_to)
-        self._slr_incr_q(term, d)
+        self._slr_incr_q(term, d, is_rel=True)
 
     def delete_rels(self, **kwargs):
         """Handle DB request to delete relations. Accepts the same arguments
