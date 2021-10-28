@@ -113,6 +113,8 @@ class DB:
     #
     # This class also serves as a reference interface for repositories
 
+    num_args = ('q', 'q_eq', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
+
     def __init__(self, repo, **kwargs):
         # Prepare repository 'repo' beforehand, then set up a DB
         # like: DB(repo)
@@ -121,7 +123,8 @@ class DB:
         # for details on how to create or load databases
         self.repo = repo
 
-    def _ck_args_isnum(self, ck_args=('q', 'q_eq', 'd'), **kwargs):
+    def _ck_args_isnum(self, ck_args=None, **kwargs):
+        if ck_args is None: ck_args = self.num_args
         for a in kwargs:
             if a in ck_args:
                 if type(kwargs[a]) not in (int, float):
@@ -391,12 +394,12 @@ class DB:
         )
         self.repo.put_rel(rel, a_from, a_to, q=q)
 
-    def set_a_q(self, s, q):
+    def set_a_q(self, s, q, **kwargs):
         """
         Assign a numerical quantity q to an anchor 's'.
 
         """
-        self._ck_args_isnum(q=q)
+        self._ck_args_isnum(q=q, **kwargs)
         self.repo.set_a_q(s, q)
 
     def set_rel_q(self, name, a_from, a_to, q):
@@ -417,7 +420,6 @@ class SQLiteRepo:
         "WILDCARD_ONE": "\u005f",   # Question Mark
         "WILDCARD_ZEROPLUS": "\u0025", # Percent Sign
     }
-    num_q_args = ('q', 'q_eq', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
     table_a = "a"
     trans_wc = {}  # see wildcard dict preparation code below
     escape_a = uesc_dict(CHARS_R)
