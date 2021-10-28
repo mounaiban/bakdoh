@@ -641,7 +641,7 @@ class SQLiteRepo:
         sc_rowid = "SELECT ROWID, {} from {} ".format(self.col, self.table_a)
         sc = "".join((sc_rowid, self._slr_a_where_clause(),))
         term = self._prep_term(a)
-        cs = kwargs.get('cursor', self._slr_get_cursor())
+        cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, (term,))
 
     def _slr_insert_into_a(self, item, q):
