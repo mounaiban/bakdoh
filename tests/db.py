@@ -185,11 +185,11 @@ class DBTests(TestCase):
             # is set, that doesn't bomb reports with 'skipped test'
             # results
             #
-            # PROTIP: If you get a TypeError at args = ['args'],
+            # PROTIP: If you get a TypeError at args = c['args'],
             # check if:
             # * The args are valid and of the correct type
             #   (number, string, etc...)
-            # * A comma follows a lone case in args_out;
+            # * A comma follows a lone case in args_out:
             #   'args_out': ({...}) is wrong,
             #   'args_out': ({...},) is correct
         for test in data.keys():
@@ -909,6 +909,50 @@ class DBWriteTests(DBTests):
                     },
                 ),
             },
+            'set_a_q_q_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'set_a_q() by q-value and wildcard',
+                    },
+                    'comments': ['relations must be left unchanged',],
+                },
+                'method': 'set_a_q',
+                'init': (
+                    ('vx1', 0),
+                    ('vx2', 0),
+                    ('ax1', 1.0),
+                    ('ax2', 2.0),
+                    ('vg', 0.5),
+                    ('r', 0),
+                    ('v', 'vg', 'r', 0)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'s': 'v*', 'q': 0.1, 'q_eq': 0},
+                        'final': [
+                            Anchor('vx1', 0.1),
+                            Anchor('vx2', 0.1),
+                            Anchor('ax1', 1.0),
+                            Anchor('ax2', 2.0),
+                            Anchor('vg', 0.5),
+                            Anchor('r', 0),
+                            ('v', Anchor('vg', 0.5), Anchor('r', 0), 0)
+                        ]
+                    },
+                    {
+                        'args': {'s': '*', 'q': 0.1, 'q_eq': 0},
+                        'final': [
+                            Anchor('vx1', 0.1),
+                            Anchor('vx2', 0.1),
+                            Anchor('ax1', 1.0),
+                            Anchor('ax2', 2.0),
+                            Anchor('vg', 0.5),
+                            Anchor('r', 0.1),
+                            ('v', Anchor('vg', 0.5), Anchor('r', 0.1), 0)
+                        ]
+                    },
+                )
+            },
             'set_a_q_wc': {
                 'meta': {
                     'description': {
@@ -1037,6 +1081,122 @@ class DBWriteTests(DBTests):
                             Anchor('a', 1),
                             Anchor('z', 2),
                             ('z', Anchor('a', 1), Anchor('z', 2), -10)
+                        ]
+                    },
+                ),
+            },
+            'incr_rel_q_q_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'incr_rel_q() by wildcard and q-value',
+                    },
+                    'comment': ['anchors must be left unchanged'],
+                },
+                'method': 'incr_rel_q',
+                'init': (
+                    ('qx1', 10),
+                    ('qx2', 20),
+                    ('ca1', 30),
+                    ('cb1', 40),
+                    ('cb2', 50),
+                    ('Lx0', 'ca1', 'qx1', 10),
+                    ('Lx1', 'ca1', 'qx2', 20),
+                    ('Ln0', 'ca1', 'cb1', 30),
+                    ('Ln1', 'ca1', 'cb2', 40),
+                ),
+                'args_outs': (
+                    {
+                        'args': {
+                            'name': 'Ln*',
+                            'a_from': '*',
+                            'a_to': '*',
+                            'q_lte': 30,
+                            'd': 5
+                        },
+                        'final': [
+                            Anchor('qx1', 10),
+                            Anchor('qx2', 20),
+                            Anchor('ca1', 30),
+                            Anchor('cb1', 40),
+                            Anchor('cb2', 50),
+                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 10),
+                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 20),
+                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 35),
+                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
+                        ]
+                    },
+                    {
+                        'args': {
+                            'name': '*',
+                            'a_from': '*1',
+                            'a_to': '*1',
+                            'q_lte': 20,
+                            'd': 5
+                        },
+                        'final': [
+                            Anchor('qx1', 10),
+                            Anchor('qx2', 20),
+                            Anchor('ca1', 30),
+                            Anchor('cb1', 40),
+                            Anchor('cb2', 50),
+                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 15),
+                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 20),
+                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 30),
+                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
+                        ]
+                    },
+                ),
+            },
+            'incr_rel_q_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'incr_rel_q() by wildcard',
+                    },
+                    'comment': ['anchors must be left unchanged'],
+                },
+                'method': 'incr_rel_q',
+                'init': (
+                    ('qx1', 10),
+                    ('qx2', 20),
+                    ('ca1', 30),
+                    ('cb1', 40),
+                    ('cb2', 50),
+                    ('Lx0', 'ca1', 'qx1', 10),
+                    ('Lx1', 'ca1', 'qx2', 20),
+                    ('Ln0', 'ca1', 'cb1', 30),
+                    ('Ln1', 'ca1', 'cb2', 40),
+                ),
+                'args_outs': (
+                    {
+                        'args': {
+                            'name': 'Lx*', 'a_from': '*', 'a_to': '*', 'd': 5
+                        },
+                        'final': [
+                            Anchor('qx1', 10),
+                            Anchor('qx2', 20),
+                            Anchor('ca1', 30),
+                            Anchor('cb1', 40),
+                            Anchor('cb2', 50),
+                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 15),
+                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 25),
+                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 30),
+                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
+                        ]
+                    },
+                    {
+                        'args': {
+                            'name': '*', 'a_from': '*1', 'a_to': '*1', 'd': 5
+                        },
+                        'final': [
+                            Anchor('qx1', 10),
+                            Anchor('qx2', 20),
+                            Anchor('ca1', 30),
+                            Anchor('cb1', 40),
+                            Anchor('cb2', 50),
+                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 15),
+                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 20),
+                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 35),
+                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
                         ]
                     },
                 ),
@@ -1272,6 +1432,60 @@ class DBWriteTests(DBTests):
                             Anchor('a', 1),
                             Anchor('z', 2),
                             ('z', Anchor('a', 1), Anchor('z', 2), -2)
+                        ]
+                    },
+                ),
+            },
+            'set_rel_q_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'set_rel_q() by wildcard',
+                    },
+                    'comment': ['anchors must be left unchanged'],
+                },
+                'method': 'set_rel_q',
+                'init': (
+                    ('qx1', 0),
+                    ('qx2', 0),
+                    ('ca1', 0),
+                    ('cb1', 0),
+                    ('cb2', 0),
+                    ('Lx0', 'ca1', 'qx1', 0),
+                    ('Lx1', 'ca1', 'qx2', 0),
+                    ('Ln0', 'ca1', 'cb1', 0),
+                    ('Ln1', 'ca1', 'cb2', 0),
+                ),
+                'args_outs': (
+                    {
+                        'args': {
+                            'name': 'Lx*', 'a_from': '*', 'a_to': '*', 'q': 100
+                        },
+                        'final': [
+                            Anchor('qx1', 0),
+                            Anchor('qx2', 0),
+                            Anchor('ca1', 0),
+                            Anchor('cb1', 0),
+                            Anchor('cb2', 0),
+                            ('Lx0', Anchor('ca1',0), Anchor('qx1',0), 100),
+                            ('Lx1', Anchor('ca1',0), Anchor('qx2',0), 100),
+                            ('Ln0', Anchor('ca1',0), Anchor('cb1',0), 0),
+                            ('Ln1', Anchor('ca1',0), Anchor('cb2',0), 0),
+                        ]
+                    },
+                    {
+                        'args': {
+                            'name': '*', 'a_from': '*1', 'a_to': '*1', 'q': 100
+                        },
+                        'final': [
+                            Anchor('qx1', 0),
+                            Anchor('qx2', 0),
+                            Anchor('ca1', 0),
+                            Anchor('cb1', 0),
+                            Anchor('cb2', 0),
+                            ('Lx0', Anchor('ca1',0), Anchor('qx1',0), 100),
+                            ('Lx1', Anchor('ca1',0), Anchor('qx2',0), 0),
+                            ('Ln0', Anchor('ca1',0), Anchor('cb1',0), 100),
+                            ('Ln1', Anchor('ca1',0), Anchor('cb2',0), 0),
                         ]
                     },
                 ),

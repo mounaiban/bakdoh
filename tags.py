@@ -350,7 +350,7 @@ class DB:
         self._ck_args_isnum(d=d)
         self.repo.incr_a_q(a, d, **kwargs)
 
-    def incr_rel_q(self, name, a_from, a_to, d):
+    def incr_rel_q(self, name, a_from, a_to, d, **kwargs):
         """
         Increment or decrement a quantity assigned to a relation between
         a_from and a_to by d. When d<0, the quantity is decreased.
@@ -359,8 +359,8 @@ class DB:
         no effect.
 
         """
-        self._ck_args_isnum(d=d)
-        self.repo.incr_rel_q(name, a_from, a_to, d)
+        self._ck_args_isnum(d=d, **kwargs)
+        self.repo.incr_rel_q(name, a_from, a_to, d, **kwargs)
 
     def put_a(self, a, q=None):
         """
@@ -400,16 +400,16 @@ class DB:
 
         """
         self._ck_args_isnum(q=q, **kwargs)
-        self.repo.set_a_q(s, q)
+        self.repo.set_a_q(s, q, **kwargs)
 
-    def set_rel_q(self, name, a_from, a_to, q):
+    def set_rel_q(self, name, a_from, a_to, q, **kwargs):
         """
         Assign a numerical quantity q to a relation between anchors
         a_from and a_to.
 
         """
-        self._ck_args_isnum(q=q)
-        self.repo.set_rel_q(name, a_from, a_to, q)
+        self._ck_args_isnum(q=q, **kwargs)
+        self.repo.set_rel_q(name, a_from, a_to, q, **kwargs)
 
 class SQLiteRepo:
     """
@@ -579,10 +579,15 @@ class SQLiteRepo:
 
     def _slr_set_q(self, ae, q, is_rel=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
-        sc_up = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
-        sc = "".join((sc_up, self._slr_a_where_clause(is_rel=is_rel)))
+        sc_set = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
+        sc = "".join((sc_set, self._slr_a_where_clause(is_rel=is_rel)))
+        params = [q, ae]
+        if kwargs:
+            sc_q, qparams = self._slr_q_clause(**kwargs)
+            sc = "".join((sc, sc_q))
+            params.extend(qparams)
         cus = self._slr_get_cursor()
-        cus.execute(sc, (q, ae))
+        cus.execute(sc, params)
         self._db_conn.commit()
 
     def _slr_incr_q(self, ae, d, is_rel=False, **kwargs):
@@ -915,31 +920,31 @@ class SQLiteRepo:
             if 'UNIQUE constraint failed' in x.args[0]:
                 raise ValueError('relation already exists')
 
-    def set_rel_q(self, name, a_from, a_to, q):
+    def set_rel_q(self, name, a_from, a_to, q, **kwargs):
         """Handle DB request to set the numerical quantity assigned
         to the relationship named 'name' from anchor 'a_from' to
-        'a_to'. Called from DB.set_rel_q()
+        'a_to'. Called from DB.set_rel_q(). Please see the documentation
+        for that method for usage.
 
         """
-        ae_from = self._prep_a(a_from)
-        ae_to = self._prep_a(a_to)
-        namee = self._prep_a(name)
-        self._slr_ck_anchors_exist(namee=namee, a1e=ae_from, a2e=ae_to, q=q)
-        term = self.reltxt(name, ae_from, ae_to)
-        self._slr_set_q(term, q, is_rel=True)
+        ae_from = self._prep_term(a_from)
+        ae_to = self._prep_term(a_to)
+        namee = self._prep_term(name)
+        term = self.reltxt(namee, ae_from, ae_to)
+        self._slr_set_q(term, q, is_rel=True, **kwargs)
 
-    def incr_rel_q(self, name, a_from, a_to, d):
+    def incr_rel_q(self, name, a_from, a_to, d, **kwargs):
         """Handle DB request to increment/decrement the numerical
         quantity assigned to the relationship named 'name' from anchor
-        'a_from' to 'a_to'. Called from DB.incr_rel_q()
+        'a_from' to 'a_to'. Called from DB.incr_rel_q() please see the
+        documentation for that method for usage.
 
         """
-        ae_from = self._prep_a(a_from)
-        ae_to = self._prep_a(a_to)
-        namee = self._prep_a(name)
-        self._slr_ck_anchors_exist(namee=namee, a1e=ae_from, a2e=ae_to, d=d)
-        term = self.reltxt(name, ae_from, ae_to)
-        self._slr_incr_q(term, d, is_rel=True)
+        ae_from = self._prep_term(a_from)
+        ae_to = self._prep_term(a_to)
+        namee = self._prep_term(name)
+        term = self.reltxt(namee, ae_from, ae_to)
+        self._slr_incr_q(term, d, is_rel=True, **kwargs)
 
     def delete_rels(self, **kwargs):
         """Handle DB request to delete relations. Accepts the same arguments
