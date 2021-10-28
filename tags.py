@@ -121,7 +121,7 @@ class DB:
         # for details on how to create or load databases
         self.repo = repo
 
-    def _ck_args_isnum(self, ck_args=('q','d'), **kwargs):
+    def _ck_args_isnum(self, ck_args=('q', 'q_eq', 'd'), **kwargs):
         for a in kwargs:
             if a in ck_args:
                 if type(kwargs[a]) not in (int, float):
@@ -144,7 +144,7 @@ class DB:
         Accepts the same arguments and wildcard syntax as get_rels(),
         please see the documentation for that method for details.
 
-        Accepted arguments: s, q, (q_gt or q_gte), (q_lt or q_lte).
+        Accepted arguments: s, q_eq, (q_gt or q_gte), (q_lt or q_lte).
         See get_a() for details on how to use the q-arguments.
 
         Wildcards
@@ -181,7 +181,7 @@ class DB:
         Accepts the same arguments and wildcard syntax as get_rels(),
         please see the documentation for that method for details.
 
-        Accepted arguments: a_from, a_to, name, q, (q_gt or q_gte),
+        Accepted arguments: a_from, a_to, name, q_eq, (q_gt or q_gte),
         (q_lt or q_lte)
 
         At least either a_to or a_from must be specified.
@@ -230,19 +230,19 @@ class DB:
         =========
         * name : return only relations matching 'name'
 
-        * q : return only relations with a q-value equals to 'q'
+        * q_eq : return only relations with a q-value equals to 'q_eq'
 
         * q_gt : return only relations with a q-value greater than 'q_gt';
-         cannot be used with 'q' or 'q_gte'
+         cannot be used with 'q_eq' or 'q_gte'
 
         * q_gte : return only relations with a q-value greater than or equal
-          to 'q_gte'; cannot be used with 'q' or 'q_gt'
+          to 'q_gte'; cannot be used with 'q_eq' or 'q_gt'
 
         * q_lt : return only relations with a q-value smaller than 'q_lt';
-         cannot be used with 'q' or 'q_lte'
+         cannot be used with 'q_eq' or 'q_lte'
 
         * q_lte : return only relations with a q-value smaller than or
-          equal to 'q_lte'; cannot be used with 'q' or 'q_lt'
+          equal to 'q_lte'; cannot be used with 'q_eq' or 'q_lt'
 
         Wildcards
         =========
@@ -290,19 +290,19 @@ class DB:
 
         * name : return only relations matching 'name'
 
-        * q : return only relations with a q-value equals to 'q'
+        * q_eq : return only relations with a q-value equals to 'q_eq'
 
         * q_gt : return only relations with a q-value greater than 'q_gt';
-         cannot be used with 'q' or 'q_gte'
+          cannot be used with 'q_eq' or 'q_gte'
 
         * q_gte : return only relations with a q-value greater than or equal
-          to 'q_gte'; cannot be used with 'q' or 'q_gt'
+          to 'q_gte'; cannot be used with 'q_eq' or 'q_gt'
 
         * q_lt : return only relations with a q-value smaller than 'q_lt';
-         cannot be used with 'q' or 'q_lte'
+          cannot be used with 'q_eq' or 'q_lte'
 
         * q_lte : return only relations with a q-value smaller than or
-          equal to 'q_lte'; cannot be used with 'q' or 'q_lt'
+          equal to 'q_lte'; cannot be used with 'q_eq' or 'q_lt'
 
         Wildcards
         =========
@@ -396,10 +396,6 @@ class DB:
         Assign a numerical quantity q to an anchor 's'.
 
         """
-        # TODO: q values cannot be set by existing quantity,
-        # because both q value selection and specification
-        # are based on the argument name 'q'. The API has to
-        # be revised with names that tell the two apart.
         self._ck_args_isnum(q=q)
         self.repo.set_a_q(s, q)
 
@@ -421,7 +417,7 @@ class SQLiteRepo:
         "WILDCARD_ONE": "\u005f",   # Question Mark
         "WILDCARD_ZEROPLUS": "\u0025", # Percent Sign
     }
-    num_q_args = ('q', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
+    num_q_args = ('q', 'q_eq', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
     table_a = "a"
     trans_wc = {}  # see wildcard dict preparation code below
     escape_a = uesc_dict(CHARS_R)
@@ -605,7 +601,7 @@ class SQLiteRepo:
 
         Please see DB.get_rels() for usage
 
-        Supported kwargs: cursor, is_rel, q, (q_gt or q_gte),
+        Supported kwargs: cursor, is_rel, q_eq, (q_gt or q_gte),
         (q_lt or q_lte), q_not
 
         """
@@ -694,7 +690,7 @@ class SQLiteRepo:
 
         Arguments
         =========
-        * q: Specify exact quantity. Cannot be used with any
+        * q_eq: Specify exact quantity. Cannot be used with any
           other argument.
 
         * q_gt, q_gte: Specify lower bound (greater than x);
@@ -729,9 +725,9 @@ class SQLiteRepo:
         params = []
         ub = None  # upper bound
         ub_expr = ""
-        if 'q' in kwargs:
+        if 'q_eq' in kwargs:
             # exact
-            lbe = kwargs['q']
+            lbe = kwargs['q_eq']
             lbe_expr = "{} = ?".format(self.col_q)
             params.append(lbe)
         else:

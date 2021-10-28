@@ -184,6 +184,14 @@ class DBTests(TestCase):
             # TODO: find a way of skipping tests when no RepoClass
             # is set, that doesn't bomb reports with 'skipped test'
             # results
+            #
+            # PROTIP: If you get a TypeError at args = ['args'],
+            # check if:
+            # * The args are valid and of the correct type
+            #   (number, string, etc...)
+            # * A comma follows a lone case in args_out;
+            #   'args_out': ({...}) is wrong,
+            #   'args_out': ({...},) is correct
         for test in data.keys():
             t = data[test]
             for c in t['args_outs']:
@@ -318,11 +326,11 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a': '*', 'q': 255},
+                        'args': {'a': '*', 'q_eq': 255},
                         'out': [Anchor('t', 255), Anchor('z', 255)]
                     },
                     {
-                        'args': {'a': '*', 'q': 1.414},
+                        'args': {'a': '*', 'q_eq': 1.414},
                         'out': [Anchor('j', 1.414),]
                     }
                 ),
@@ -347,7 +355,7 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a': '*', 'q': 0},
+                        'args': {'a': '*', 'q_eq': 0},
                         'out': [Anchor('n', 0), Anchor('z', 0)]
                     },
                 ),
@@ -395,7 +403,7 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a': '*', 'q': -5, 'q_not': True},
+                        'args': {'a': '*', 'q_eq': -5, 'q_not': True},
                         'out': [
                             Anchor('a', -10),
                             Anchor('m', 5),
@@ -684,20 +692,104 @@ class DBWriteTests(DBTests):
                     'description': {
                         'en-au': 'incr_a_q() specific anchor',
                     },
+                    'comments': ['relations must be unchanged',],
                 },
                 'method': 'incr_a_q',
-                'init': (('a', 0),),
+                'init': (('a', 0), ('z', 0), ('r', 'a', 'z', None)),
                 'args_outs': (
                     {
                         'args': {'a': 'a', 'd': -10},
-                        'final': [Anchor('a', -10),]
+                        'final': [
+                            Anchor('a', -10),
+                            Anchor('z', 0),
+                            ('r', Anchor('a', -10), Anchor('z', 0), None),
+                        ]
                     },
                     {
                         'args': {'a': 'a', 'd': 10},
-                        'final': [Anchor('a', 10),]
+                        'final': [
+                            Anchor('a', 10),
+                            Anchor('z', 0),
+                            ('r', Anchor('a', 10), Anchor('z', 0), None),
+                        ]
                     },
                 ),
             },
+            'incr_a_q_q_exact': {
+                'meta': {
+                    'description': {
+                        'en-au': 'incr_a_q() by exact q value',
+                    },
+                    'comments': ['relations must be unchanged',],
+                },
+                'method': 'incr_a_q',
+                'init': (
+                    ('a', 0),
+                    ('g', 1.4),
+                    ('m', 2.8),
+                    ('s', 0.72),
+                    ('z', 0),
+                    ('r', 'a', 'z', None)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a': '*', 'd': 0.36, 'q_eq':0},
+                        'final': [
+                            Anchor('a', 0.36),
+                            Anchor('g', 1.4),
+                            Anchor('m', 2.8),
+                            Anchor('s', 0.72),
+                            Anchor('z', 0.36),
+                            ('r', Anchor('a', 0.36), Anchor('z', 0.36), None)
+                        ]
+                    },
+                )
+            },
+            'incr_a_q_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'incr_a_q() by anchor wildcard',
+                    },
+                    'comments': ['relations must be unchanged',],
+                },
+                'method': 'incr_a_q',
+                'init': (
+                    ('tfa', 20),
+                    ('tfb', 30),
+                    ('tra', 40),
+                    ('trb', 50),
+                    ('ma', 1000),
+                    ('k', 0),
+                    ('tfa', 'tfa', 'k', None)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'a': '?f?', 'd': -5},
+                        'final': [
+                            Anchor('tfa', 15),
+                            Anchor('tfb', 25),
+                            Anchor('tra', 40),
+                            Anchor('trb', 50),
+                            Anchor('ma', 1000),
+                            Anchor('k', 0),
+                            ('tfa', Anchor('tfa', 15), Anchor('k', 0), None)
+                        ]
+                    },
+                    {
+                        'args': {'a': 't*', 'd': 273},
+                        'final': [
+                            Anchor('tfa', 293),
+                            Anchor('tfb', 303),
+                            Anchor('tra', 313),
+                            Anchor('trb', 323),
+                            Anchor('ma', 1000),
+                            Anchor('k', 0),
+                            ('tfa', Anchor('tfa', 293), Anchor('k', 0), None)
+                        ]
+                    },
+                )
+            }
+
         }
         self._run_tests(test_data)
 
@@ -792,7 +884,7 @@ class DBWriteTests(DBTests):
             'set_a_q': {
                 'meta': {
                     'description': {
-                        'en-au': 'set_rel_q() on specific relation',
+                        'en-au': 'set_a_q() on specific relation',
                     },
                     'comment': ['relations must be left unchanged'],
                 },
@@ -817,6 +909,50 @@ class DBWriteTests(DBTests):
                     },
                 ),
             },
+            'set_a_q_wc': {
+                'meta': {
+                    'description': {
+                        'en-au': 'set_a_q() by anchor wildcard',
+                    },
+                    'comments': ['relations must be left unchanged',],
+                },
+                'method': 'set_a_q',
+                'init': (
+                    ('vx1', 1.5),
+                    ('vx2', 3.3),
+                    ('ax1', 1.0),
+                    ('ax2', 2.0),
+                    ('vg', 0.5),
+                    ('r', 0),
+                    ('v', 'vg', 'r', None)
+                ),
+                'args_outs': (
+                    {
+                        'args': {'s': 'v*', 'q': 0},
+                        'final': [
+                            Anchor('vx1', 0),
+                            Anchor('vx2', 0),
+                            Anchor('ax1', 1.0),
+                            Anchor('ax2', 2.0),
+                            Anchor('vg', 0),
+                            Anchor('r', 0),
+                            ('v', Anchor('vg', 0), Anchor('r', 0), None)
+                        ]
+                    },
+                    {
+                        'args': {'s': '?x?', 'q': 0},
+                        'final': [
+                            Anchor('vx1', 0),
+                            Anchor('vx2', 0),
+                            Anchor('ax1', 0),
+                            Anchor('ax2', 0),
+                            Anchor('vg', 0.5),
+                            Anchor('r', 0),
+                            ('v', Anchor('vg', 0.5), Anchor('r', 0), None)
+                        ]
+                    },
+                )
+            }
         }
         self._run_tests(test_data)
 
