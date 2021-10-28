@@ -66,7 +66,7 @@ def direct_insert(repo, anchors):
 
     """
     sc = "INSERT INTO {} VALUES (?,?)".format(SQLiteRepo.table_a)
-    cus = repo._slr_get_cursor()
+    cus = repo._slr_get_shared_cursor()
     for a in anchors:
         ts = list(map(lambda x:type(x), a))
         if len(a) == 4:
@@ -230,7 +230,7 @@ class SLR_QClauseTests(TestCase):
                 {'q_gt':1, 'q_gte':3, 'q_lt':7, 'q_lte':9},
                 (' AND {0} > ? AND {0} < ?', [1, 7])
             ),
-            (
+           (
                 {'q_eq':5, 'q_gt':9, 'q_gte':9, 'q_lt':1, 'q_lte':9},
                 (' AND {} = ?', [5,])
             ),

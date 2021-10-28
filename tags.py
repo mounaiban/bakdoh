@@ -535,7 +535,7 @@ class SQLiteRepo:
             else:
                 sc = sc_ck
                 term = a
-            cs = self._slr_get_cursor()
+            cs = self._slr_get_shared_cursor()
             r = next(cs.execute(sc, (term,)))
             if r[0] <= 0:
                 raise ValueError('both anchors must exist')
@@ -563,7 +563,7 @@ class SQLiteRepo:
             WHERE {1} LIKE '%' AND {2} LIKE '%'
             LIMIT 1
         """.format(self.table_a, self.col, self.col_q)
-        cs = self._slr_get_cursor()
+        cs = self._slr_get_shared_cursor()
         cs.execute(sc_ck)
 
     def _slr_create_tables(self):
@@ -574,7 +574,7 @@ class SQLiteRepo:
         sc = 'CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {})'.format(
             self.table_a, self.col, self.col_q
         )
-        cs = self._slr_get_cursor()
+        cs = self._slr_get_shared_cursor()
         cs.execute(sc)
 
     def _slr_set_q(self, ae, q, is_rel=False, **kwargs):
@@ -586,7 +586,7 @@ class SQLiteRepo:
             sc_q, qparams = self._slr_q_clause(**kwargs)
             sc = "".join((sc, sc_q))
             params.extend(qparams)
-        cus = self._slr_get_cursor()
+        cus = self._slr_get_shared_cursor()
         cus.execute(sc, params)
         self._db_conn.commit()
 
@@ -598,7 +598,7 @@ class SQLiteRepo:
             sc_q, qparams = self._slr_q_clause(**kwargs)
             sc = "".join((sc, sc_q))
             params.extend(qparams)
-        cus = self._slr_get_cursor()
+        cus = self._slr_get_shared_cursor()
         cus.execute(sc, params)
         self._db_conn.commit()
 
@@ -631,7 +631,7 @@ class SQLiteRepo:
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, params)
 
-    def _slr_get_cursor(self):
+    def _slr_get_shared_cursor(self):
         if not self._db_cus:
             self._db_cus = self._db_conn.cursor()
         return self._db_cus
@@ -657,7 +657,7 @@ class SQLiteRepo:
             if type(q) not in (int, float):
                 raise TypeError('q must be a number')
         sc = 'INSERT INTO {} VALUES(?, ?)'.format(self.table_a)
-        cs = self._slr_get_cursor()
+        cs = self._slr_get_shared_cursor()
         cs.execute(sc, (item, q))
         self._db_conn.commit()
 
@@ -879,7 +879,7 @@ class SQLiteRepo:
 
         sc_delete = "DELETE FROM {} ".format(self.table_a)
         sc = "".join((sc_delete, self._slr_a_where_clause()))
-        cs = self._slr_get_cursor()
+        cs = self._slr_get_shared_cursor()
         cs.execute(sc, (self._prep_term(a),))
         self._db_conn.commit()
 
@@ -973,7 +973,7 @@ class SQLiteRepo:
             namee = self._prep_term(name)
         sc_delete = "DELETE FROM {} ".format(self.table_a)
         sc = "".join((sc_delete, self._slr_a_where_clause(is_rel=True)))
-        cs = self._slr_get_cursor()
+        cs = self._slr_get_shared_cursor()
         term = self.reltxt(namee, ae_from, ae_to)
         cs.execute(sc, (term,))
         self._db_conn.commit()
@@ -1002,7 +1002,7 @@ class SQLiteRepo:
             kwargs.get('a_from', wczp),
             kwargs.get('a_to', wczp)
         ))
-        cs = kwargs.get('cursor', self._slr_get_cursor())
+        cs = kwargs.get('cursor', self._slr_get_shared_cursor())
         return cs.execute(sc, (term,))
 
     def get_rels(self, **kwargs):
