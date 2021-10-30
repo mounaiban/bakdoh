@@ -472,7 +472,7 @@ class SQLiteRepo:
     trans_wc = {}  # see wildcard dict preparation code below
     escape_a = uesc_dict(CHARS_R)
     escape_px = uesc_dict(CHARS_R_PX)
-    col = "item"
+    col = "content"
     col_q = "q"
     limit = 32
     escape = '\\'
