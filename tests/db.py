@@ -123,18 +123,11 @@ class DBTests(TestCase):
         
         {
             test_0_name: {
-                 "meta": {
-                     "comments": [comment_0, ... comment_n],
-                     "descripton": {
-                         lang_0: desc_0,
-                         ...
-                         lang_n: desc_n,
-                     }
-                 },
                  "method": method_name,
                  "init": [anchor_0, ... anchor_n],
                  "args_outs": [
                      {
+                       "subtest_name": subtest_name,
                        "args": args,
                        "exception": ex,
                        "warning": w,
@@ -175,6 +168,11 @@ class DBTests(TestCase):
        
         * In "args_outs", "warning" and "exception" cannot be used together.
           if both are present, only "exception" will be used.
+
+        * There is currently no check to ensure that any "subtest_name" 
+          is only used once per test case. Test names may be re-used by
+          accident, so watch out for additional name matches when
+          searching for a failed test.
         
         """
         # TODO: How to port this format to ECMA-404/JSON?
@@ -185,27 +183,32 @@ class DBTests(TestCase):
             # is set, that doesn't bomb reports with 'skipped test'
             # results
             #
-            # PROTIP: If you get a TypeError at args = c['args'],
-            # check if:
+            # PROTIP: If you get a TypeError, check if:
             # * The args are valid and of the correct type
             #   (number, string, etc...)
             # * A comma follows a lone case in args_out:
             #   'args_out': ({...}) is wrong,
             #   'args_out': ({...},) is correct
         for test in data.keys():
-            t = data[test]
-            for c in t['args_outs']:
+            td = data[test]
+            args_outs = td['args_outs']
+            if type(args_outs) not in (list, tuple):
+                raise TypeError(
+                    'args_out in test {} must be list or tuple'.format(test)
+                )
+            for c in args_outs:
                 testdb = DB(self.RepoClass())
-                self.direct_insert(testdb, t['init'])
+                self.direct_insert(testdb, td['init'])
                 args = c['args']
                 ex = None
-                m = testdb.__getattribute__(t['method'])
+                m = testdb.__getattribute__(td['method'])
+                n = c.get('subtest_name')
                 wa = None
                 if 'exception' in c:
                     ex = getattr(builtins, c.get('exception', ''))
                 elif 'warning' in c:
                     wa = getattr(builtins, c.get('warning', ''))
-                with self.subTest(test_name=test, method=m, args=args):
+                with self.subTest(test=test, subtest=n, method=m, args=args):
                     if ex:
                         with self.assertRaises(ex):
                             result = m(**args)
@@ -1341,17 +1344,13 @@ class DBWriteTests(DBTests):
                 ),
             },
             'put_rel_duplicate': {
-                'meta': {
-                    'description': {
-                        'en-au': 'put_rel(): duplicate relations',
-                    },
-                },
                 'method': 'put_rel',
                 'init': (
                     ('a', 1), ('z', 2), ('r', 'a', 'z', None),
                 ),
                 'args_outs': (
                     {
+                        'subtest_name': 'put_rel_duplicate_no_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'z'},
                         'exception': 'ValueError',
                         'final': [
@@ -1361,6 +1360,7 @@ class DBWriteTests(DBTests):
                         ]
                     },
                     {
+                        'subtest_name': 'put_rel_duplicate_set_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'z', 'q': 99},
                         'exception': 'ValueError',
                         'final': [
@@ -1372,17 +1372,13 @@ class DBWriteTests(DBTests):
                 ),
             },
             'put_rel_self_link': {
-                'meta': {
-                    'description': {
-                        'en-au': 'put_rel(): self-linking relations',
-                    },
-                },
                 'method': 'put_rel',
                 'init': (
                     ('a', 1),
                 ),
                 'args_outs': (
                     {
+                        'subtest_name': 'put_rel_self_link_no_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'a'},
                         'exception': 'ValueError',
                         'final': [
@@ -1390,6 +1386,7 @@ class DBWriteTests(DBTests):
                         ]
                     },
                     {
+                        'subtest_name': 'put_rel_self_link_set_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'a', 'q': 99},
                         'exception': 'ValueError',
                         'final': [
@@ -1405,16 +1402,11 @@ class DBWriteTests(DBTests):
         """set_rel_q: set relation q-value"""
         test_data = {
             'set_rel_q': {
-                'meta': {
-                    'description': {
-                        'en-au': 'set_rel_q() on specific relation',
-                    },
-                    'comment': ['anchors must be left unchanged'],
-                },
                 'method': 'set_rel_q',
                 'init': (('a', 1), ('z', 2), ('z', 'a', 'z', None)),
                 'args_outs': (
                     {
+                        'subtest_name': 'set_rel_q_exact_rel_pos',
                         'args': {
                             'name': 'z', 'a_from':'a', 'a_to':'z', 'q': 2
                         },
@@ -1425,6 +1417,7 @@ class DBWriteTests(DBTests):
                         ]
                     },
                     {
+                        'subtest_name': 'set_rel_q_exact_rel_neg',
                         'args': {
                             'name': 'z', 'a_from':'a', 'a_to':'z', 'q': -2
                         },
@@ -1437,12 +1430,6 @@ class DBWriteTests(DBTests):
                 ),
             },
             'set_rel_q_wc': {
-                'meta': {
-                    'description': {
-                        'en-au': 'set_rel_q() by wildcard',
-                    },
-                    'comment': ['anchors must be left unchanged'],
-                },
                 'method': 'set_rel_q',
                 'init': (
                     ('qx1', 0),
@@ -1457,6 +1444,7 @@ class DBWriteTests(DBTests):
                 ),
                 'args_outs': (
                     {
+                        'subtest_name': 'set_rel_q_wc_name_prefix',
                         'args': {
                             'name': 'Lx*', 'a_from': '*', 'a_to': '*', 'q': 100
                         },
@@ -1473,6 +1461,7 @@ class DBWriteTests(DBTests):
                         ]
                     },
                     {
+                        'subtest_name': 'set_rel_q_a_content_suffix',
                         'args': {
                             'name': '*', 'a_from': '*1', 'a_to': '*1', 'q': 100
                         },
@@ -1496,16 +1485,11 @@ class DBWriteTests(DBTests):
     def test_self_test_run_tests(self):
         test_data = {
             '_run_tests_with_ex': {
-                'meta': {
-                    'comments': ['delete_rels() cannot be used without args'],
-                    'description': {
-                        'en-au': 'test _run_test() exceptions',
-                    },
-                },
                 'method': 'delete_rels',
                 'init': (('a', 1), ('z', 2)),
                 'args_outs': (
                     {
+                        'subtest_name': '_run_tests_ex_invalid_args',
                         'args': {},
                         'exception': 'ValueError',
                         'final': [ Anchor('a', 1), Anchor('z', 2), ]
