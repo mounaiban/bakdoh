@@ -114,6 +114,7 @@ class DB:
     # This class also serves as a reference interface for repositories
 
     num_args = ('q', 'q_eq', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
+    default_out_format = 0x7
 
     def __init__(self, repo, **kwargs):
         # Prepare repository 'repo' beforehand, then set up a DB
@@ -233,6 +234,19 @@ class DB:
         =========
         * name : return only relations matching 'name'
 
+        * out_format: sets the output format; accepted values are
+          the integers 1, 3, 7 or the string "interchange":
+
+          1: a, return anchor content only
+
+          3: (a, q), return content and q-value in tuple
+
+          7: Anchor(a,q), return content and q-value as Anchor object
+
+          "interchange": same as 3 for anchors, use for export/import
+
+          The default format is 7.
+
         * q_eq : return only relations with a q-value equals to 'q_eq'
 
         * q_gt : return only relations with a q-value greater than 'q_gt';
@@ -268,9 +282,21 @@ class DB:
           with 'ch'
 
         """
-        return (
-            Anchor(a, q, db=self) for a, q in self.repo.get_a(a, **kwargs)
-        )
+        def format_bare(rout):
+            return (rout[0], rout[1])
+
+        def format_obj(rout):
+            return Anchor(rout[0], rout[1], db=self)
+
+        def format_conly(rout):
+            # content only
+            return rout[0]
+
+        fmt_fns = {0x1: format_conly, 0x3: format_bare, 0x7: format_obj}
+        fmt = kwargs.get('out_format', self.default_out_format)
+        if fmt == 'interchange': fmt = 0x3
+        f = fmt_fns[fmt]
+        return (f(r) for r in self.repo.get_a(a, **kwargs))
 
     def get_rel_names(self, s, **kwargs):
         # Return an iterator of relation names in use between
@@ -280,10 +306,10 @@ class DB:
     def get_rels(self, **kwargs):
         """
         Return an iterator containing relations by name, anchor, or
-        wildcard. Each relation is presented as a list of four
+        wildcard. Each relation is presented as a tuple of four
         elements:
 
-        [relation_name, from_anchor, to_anchor, quantity]
+        (relation_name, from_anchor, to_anchor, quantity)
 
         Arguments
         =========
@@ -292,6 +318,21 @@ class DB:
         * a_to : return only relations towards anchors matching 'a_from'
 
         * name : return only relations matching 'name'
+
+        * out_format: sets the output format; accepted values are
+          the integers 1, 3, 7 or the string "interchange":
+
+          1: (name, a_from, a_to, q) return anchor content only
+
+          3: (name, (a_from, a_from_q), (a_to, a_to_q), q)
+             return anchor content and q-value
+
+          7: (name, Anchor(a,q), Anchor(a,q), q)
+             return anchors as Anchor objects
+
+          "interchange": same as 1 for relations, use for export/import
+
+          The default format is 7.
 
         * q_eq : return only relations with a q-value equals to 'q_eq'
 
@@ -333,8 +374,15 @@ class DB:
           with names starting with 'mashup'
 
         """
+        fmt = kwargs.get('out_format', self.default_out_format)
+        if fmt == 'interchange': fmt=0x1
         return (
-            (n, next(self.get_a(f)), next(self.get_a(t)), q)
+            (
+                n,
+                next(self.get_a(f, out_format=fmt)),
+                next(self.get_a(t, out_format=fmt)),
+                q
+            )
             for n, f, t, q in self.repo.get_rels(**kwargs)
         )
 
