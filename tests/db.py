@@ -30,11 +30,11 @@ Bakdoh TAGS Database Tests
 #    as a stub and an informal specification.
 #
 # 2. Implement the methods defined in DBTests in the new
-#    subclass, for each test case. 
+#    subclass, for each test case.
 #
 # 3. Place the test case subclass in a module with all the other
 #    tests where it can be discovered by Python unittest.
-#    
+#
 # Most tests in this module are data-driven; tests are defined by test
 # data files or Python dicts. The format is at the bottom of this file.
 #
@@ -63,7 +63,7 @@ class DBTests(TestCase):
         * db: database object
 
         * x : an iterable of anchors and/or relations:
-          
+
           If an element is a 2-tuple like (a, q), insert an
           anchor 'a' with a numeric q-value of 'q'.
 
@@ -87,9 +87,14 @@ class DBTests(TestCase):
 
         Return Format
         =============
-        Anchors and relations must be returned in a list.
+        Anchors and relations must be returned in a list, in
+        the interchange format:
 
-        * Anchors must be returned as an Anchor object
+        * Anchors must be returned as 2-tuple like (a, q), where:
+
+          'a' is the Anchor's content
+
+          'q' is the q-value of the Anchor
 
         * Relations must be returned in a 4-tuple like
           (n, afo, ato, q), where:
@@ -120,7 +125,7 @@ class DBTests(TestCase):
         TAGS Database Test Case Data Format
         ===================================
         This is a summary of the format used in Database test plans:
-        
+
         {
             test_0_name: {
                  "method": method_name,
@@ -140,40 +145,43 @@ class DBTests(TestCase):
             ...
             test_n_name: test,
         }
-        
+
         For each item in args_outs, the method nominated by 'method_name'
         is run with arguments from 'args' on a temporary, mock database with
         contents defined by init.
-        
+
         The output of the method call is compared with 'out'. When a warning
         or exception is expected, its type is checked against ex or w.
-       
+
         The Python dict may be used in lieu of an object.
-        
+
         Notes
         =====
         * init: Initial state of the database before each test, specified in
-          accordance to the argument format accepted by direct_insert().
-          The entire array is used as the 'x' argument.
-         
+          the 'interchange' format:
+
+          (content, q) for anchors
+
+          (name, a_from_content, a_to_content, q) for relations
+
         * args_outs: an object containing arguments in "args", and
           expected returned values in "out", with optional warning or
           exception.
-        
+
         * "out" is the expected return values of calling 'method_name'
             with arguments from 'args'.
-        
+
         * "final" is the expected state of the whole mock database after
-          the test.
-       
+          the test, specified in the 'interchange' format as with "init".
+
         * In "args_outs", "warning" and "exception" cannot be used together.
           if both are present, only "exception" will be used.
 
-        * There is currently no check to ensure that any "subtest_name" 
+        * There is currently no check to ensure that any "subtest_name"
           is only used once per test case. Test names may be re-used by
           accident, so watch out for additional name matches when
           searching for a failed test.
-        
+
         """
         # TODO: How to port this format to ECMA-404/JSON?
         # TODO: Support multiple successive calls per "args_outs"
@@ -255,9 +263,18 @@ class DBGetTests(DBTests):
                     ('z', 'z', 'a', 512)
                 ),
                 'args_outs': (
-                    {'args': {'a': 'a'}, 'out': [Anchor('a', None),]},
-                    {'args': {'a': 'n'}, 'out': [Anchor('n', 1.414),]},
-                    {'args': {'a': 'z'}, 'out': [Anchor('z', 255),]},
+                    {
+                        'args': {'a': 'a', 'out_format': 'interchange'},
+                        'out': [('a', None),]
+                    },
+                    {
+                        'args': {'a': 'n', 'out_format': 'interchange'},
+                        'out': [('n', 1.414),]
+                    },
+                    {
+                        'args': {'a': 'z', 'out_format': 'interchange'},
+                        'out': [('z', 255),]
+                    },
                 ),
             },
             'get_a_wc': {
@@ -276,37 +293,37 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a': 'c*'},
-                        'out': [Anchor('cbabc', 2), Anchor('cbaba', 2.5)]
+                        'args': {'a': 'c*', 'out_format': 'interchange'},
+                        'out': [('cbabc', 2), ('cbaba', 2.5)]
                     },
                     {
-                        'args': {'a': '*a'},
+                        'args': {'a': '*a', 'out_format': 'interchange'},
                         'out': [
-                            Anchor('ababa', None),
-                            Anchor('cbaba', 2.5),
-                            Anchor('daaaa', 3)
+                            ('ababa', None),
+                            ('cbaba', 2.5),
+                            ('daaaa', 3)
                         ]
                     },
                     {
-                        'args': {'a': '*a*'},
+                        'args': {'a': '*a*', 'out_format': 'interchange'},
                         'out': [
-                            Anchor('ababa', None),
-                            Anchor('cbabc', 2),
-                            Anchor('cbaba', 2.5),
-                            Anchor('daaaa', 3)
+                            ('ababa', None),
+                            ('cbabc', 2),
+                            ('cbaba', 2.5),
+                            ('daaaa', 3)
                         ]
                     },
                     {
-                        'args': {'a': 'c*a'},
-                        'out': [Anchor('cbaba', 2.5),]
+                        'args': {'a': 'c*a', 'out_format': 'interchange'},
+                        'out': [('cbaba', 2.5),]
                     },
                     {
-                        'args': {'a': '?b?b?'},
+                        'args': {'a': '?b?b?', 'out_format': 'interchange'},
                         'out': [
-                            Anchor('ababa', None),
-                            Anchor('bbbbb', 1),
-                            Anchor('cbabc', 2),
-                            Anchor('cbaba', 2.5),
+                            ('ababa', None),
+                            ('bbbbb', 1),
+                            ('cbabc', 2),
+                            ('cbaba', 2.5),
                         ]
                     },
                 ),
@@ -329,12 +346,16 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a': '*', 'q_eq': 255},
-                        'out': [Anchor('t', 255), Anchor('z', 255)]
+                        'args': {
+                            'a': '*', 'q_eq': 255, 'out_format': 'interchange'
+                        },
+                        'out': [('t', 255), ('z', 255)]
                     },
                     {
-                        'args': {'a': '*', 'q_eq': 1.414},
-                        'out': [Anchor('j', 1.414),]
+                        'args': {
+                            'a': '*', 'q_eq': 1.414, 'out_format': 'interchange'
+                        },
+                        'out': [('j', 1.414),]
                     }
                 ),
             },
@@ -358,8 +379,10 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a': '*', 'q_eq': 0},
-                        'out': [Anchor('n', 0), Anchor('z', 0)]
+                        'args': {
+                            'a': '*', 'q_eq': 0, 'out_format': 'interchange'
+                        },
+                        'out': [('n', 0), ('z', 0)]
                     },
                 ),
             },
@@ -373,20 +396,28 @@ class DBGetTests(DBTests):
                 'init': (('a', 10), ('n', 20), ('z', 30),),
                 'args_outs': (
                     {
-                        'args': {'a': '*', 'q_gt': 20},
-                        'out': [Anchor('z', 30),]
+                        'args': {
+                            'a': '*', 'q_gt': 20, 'out_format': 'interchange'
+                        },
+                        'out': [('z', 30),]
                     },
                     {
-                        'args': {'a': '*', 'q_lt': 20},
-                        'out': [Anchor('a', 10),]
+                        'args': {
+                            'a': '*', 'q_lt': 20, 'out_format': 'interchange'
+                        },
+                        'out': [('a', 10),]
                     },
                     {
-                        'args': {'a': '*', 'q_gte': 20},
-                        'out': [Anchor('n', 20), Anchor('z', 30),]
+                        'args': {
+                            'a': '*', 'q_gte': 20, 'out_format': 'interchange'
+                        },
+                        'out': [('n', 20), ('z', 30),]
                     },
                     {
-                        'args': {'a': '*', 'q_lte': 20},
-                        'out': [Anchor('a', 10), Anchor('n', 20),]
+                        'args': {
+                            'a': '*', 'q_lte': 20, 'out_format': 'interchange'
+                        },
+                        'out': [('a', 10), ('n', 20),]
                     },
                 ),
             },
@@ -406,46 +437,61 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a': '*', 'q_eq': -5, 'q_not': True},
-                        'out': [
-                            Anchor('a', -10),
-                            Anchor('m', 5),
-                            Anchor('s', 10)
-                        ],
-                    },
-                    {
-                        'args': {'a': '*', 'q_gt': 5, 'q_not': True},
-                        'out': [
-                            Anchor('a', -10),
-                            Anchor('g', -5),
-                            Anchor('m', 5),
-                        ],
-                    },
-                    {
-                        'args': {'a': '*', 'q_lt': -5, 'q_not': True},
-                        'out': [
-                            Anchor('g', -5),
-                            Anchor('m', 5),
-                            Anchor('s', 10),
-                        ],
-                    },
-                    {
                         'args': {
-                            'a': '*', 'q_lt': -5, 'q_gt': 5, 'q_not': True
+                            'a': '*',
+                            'q_eq': -5,
+                            'q_not': True,
+                            'out_format': 'interchange'
                         },
-                        'out': [Anchor('g', -5), Anchor('m', 5),],
+                        'out': [('a', -10), ('m', 5), ('s', 10)],
                     },
                     {
                         'args': {
-                            'a': '*', 'q_lte': -5, 'q_gte': 5, 'q_not': True
+                            'a': '*',
+                            'q_gt': 5,
+                            'q_not': True,
+                            'out_format': 'interchange'
+                        },
+                        'out': [('a', -10), ('g', -5), ('m', 5),],
+                    },
+                    {
+                        'args': {
+                            'a': '*',
+                            'q_lt': -5,
+                            'q_not': True,
+                            'out_format': 'interchange',
+                        },
+                        'out': [('g', -5), ('m', 5), ('s', 10),],
+                    },
+                    {
+                        'args': {
+                            'a': '*',
+                            'q_lt': -5,
+                            'q_gt': 5,
+                            'q_not': True,
+                            'out_format': 'interchange'
+                        },
+                        'out': [('g', -5), ('m', 5),],
+                    },
+                    {
+                        'args': {
+                            'a': '*',
+                            'q_lte': -5,
+                            'q_gte': 5,
+                            'q_not': True,
+                            'out_format': 'interchange'
                         },
                         'out': []
                     },
                     {
                         'args': {
-                            'a': '*', 'q_lt': -5, 'q_gt': 5, 'q_not': True
+                            'a': '*',
+                            'q_lt': -5,
+                            'q_gt': 5,
+                            'q_not': True,
+                            'out_format': 'interchange'
                         },
-                        'out': [Anchor('g', -5), Anchor('m', 5),],
+                        'out': [('g', -5), ('m', 5),],
                     },
                 ),
             },
@@ -471,18 +517,18 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'name': 'a'},
-                        'out': [('a', Anchor('a', 0), Anchor('n', 0), None),]
+                        'args': {'name': 'a', 'out_format': 'interchange'},
+                        'out': [('a', 'a', 'n', None),]
                     },
                     {
-                        'args': {'name': 'z'},
-                        'out': [('z', Anchor('n', 0), Anchor('a', 0), 3),]
+                        'args': {'name': 'z', 'out_format': 'interchange'},
+                        'out': [('z', 'n', 'a', 3),]
                     },
                     {
-                        'args': {'a_from': 'n'},
+                        'args': {'a_from': 'n', 'out_format': 'interchange'},
                         'out': [
-                            ('n', Anchor('n', 0), Anchor('a', 0), 2),
-                            ('z', Anchor('n', 0), Anchor('a', 0), 3),
+                            ('n', 'n', 'a', 2),
+                            ('z', 'n', 'a', 3),
                         ]
                     },
                 ),
@@ -507,34 +553,33 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'a_from': 'a', 'a_to': 'z', 'q_gt': 1},
-                        'out': [
-                            ('r2', Anchor('a', 0), Anchor('z', 1), 2),
-                            ('r4', Anchor('a', 0), Anchor('z', 1), 4),
-                        ]
+                        'args': {
+                            'a_from': 'a',
+                            'a_to': 'z',
+                            'q_gt': 1,
+                            'out_format': 'interchange'
+                        },
+                        'out': [('r2', 'a', 'z', 2), ('r4', 'a', 'z', 4),]
                     },
                     {
                         'args': {
                             'a_from': 'a',
                             'a_to': 'z',
                             'q_gt': 1,
-                            'q_not': True
+                            'q_not': True,
+                            'out_format': 'interchange'
                         },
-                        'out': [
-                            ('r0', Anchor('a', 0), Anchor('z', 1), 0),
-                        ]
+                        'out': [('r0', 'a', 'z', 0),]
                     },
                     {
                         'args': {
                             'a_from': 'a',
                             'a_to': 'z',
                             'q_lt': 1,
-                            'q_not': True
+                            'q_not': True,
+                            'out_format': 'interchange'
                         },
-                        'out': [
-                            ('r2', Anchor('a', 0), Anchor('z', 1), 2),
-                            ('r4', Anchor('a', 0), Anchor('z', 1), 4),
-                        ]
+                        'out': [('r2', 'a', 'z', 2), ('r4', 'a', 'z', 4),]
                     },
                     {
                         'args': {
@@ -546,18 +591,22 @@ class DBGetTests(DBTests):
                         'out': []
                     },
                     {
-                        'args': {'a_from': 'a', 'a_to': 'z', 'q_lt': 4},
-                        'out': [
-                            ('r0', Anchor('a', 0), Anchor('z', 1), 0),
-                            ('r2', Anchor('a', 0), Anchor('z', 1), 2),
-                        ]
+                        'args': {
+                            'a_from': 'a',
+                            'a_to': 'z',
+                            'q_lt': 4,
+                            'out_format': 'interchange'
+                        },
+                        'out': [('r0', 'a', 'z', 0), ('r2', 'a', 'z', 2),]
                     },
                     {
-                        'args': {'a_from': 'z', 'a_to': 'a', 'q_lte': 8},
-                        'out': [
-                            ('r6', Anchor('z', 1), Anchor('a', 0), 6),
-                            ('r8', Anchor('z', 1), Anchor('a', 0), 8),
-                        ]
+                        'args': {
+                            'a_from': 'z',
+                            'a_to': 'a',
+                            'q_lte': 8,
+                            'out_format': 'interchange'
+                        },
+                        'out': [('r6', 'z', 'a', 6), ('r8', 'z', 'a', 8),]
                     },
                 ),
             },
@@ -581,44 +630,42 @@ class DBGetTests(DBTests):
                 ),
                 'args_outs': (
                     {
-                        'args': {'name': '*a'},
+                        'args': {'name': '*a', 'out_format':'interchange'},
                         'out': [
-                            ('aaaa', Anchor('aaaa',1), Anchor('zwwz',4), 1),
-                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2)
+                            ('aaaa', 'aaaa', 'zwwz', 1),
+                            ('jwqa', 'jwqa', 'aaaa', 2)
                         ]
                     },
                     {
-                        'args': {'name': '*q*'},
+                        'args': {'name': '*q*', 'out_format': 'interchange'},
                         'out': [
-                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2),
-                            ('tqqz', Anchor('tqqz',3), Anchor('jwqa',2), 3)
+                            ('jwqa', 'jwqa', 'aaaa', 2),
+                            ('tqqz', 'tqqz', 'jwqa', 3)
                         ]
                     },
                     {
-                        'args': {'name': '?w??'},
+                        'args': {'name': '?w??', 'out_format': 'interchange'},
                         'out': [
-                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2),
-                            ('zwwz', Anchor('zwwz',4), Anchor('tqqz',3), 4)
+                            ('jwqa', 'jwqa', 'aaaa', 2),
+                            ('zwwz', 'zwwz', 'tqqz', 4)
                         ]
                     },
                     {
-                        'args': {'name': 'z*'},
+                        'args': {'name': 'z*', 'out_format': 'interchange'},
+                        'out': [('zwwz', 'zwwz', 'tqqz', 4)]
+                    },
+                    {
+                        'args': {'a_from': '*a', 'out_format': 'interchange'},
                         'out': [
-                            ('zwwz', Anchor('zwwz',4), Anchor('tqqz',3), 4)
+                            ('aaaa', 'aaaa', 'zwwz', 1),
+                            ('jwqa', 'jwqa', 'aaaa', 2)
                         ]
                     },
                     {
-                        'args': {'a_from': '*a'},
+                        'args': {'a_to': '*z', 'out_format': 'interchange'},
                         'out': [
-                            ('aaaa', Anchor('aaaa',1), Anchor('zwwz',4), 1),
-                            ('jwqa', Anchor('jwqa',2), Anchor('aaaa',1), 2)
-                        ]
-                    },
-                    {
-                        'args': {'a_to': '*z'},
-                        'out': [
-                            ('aaaa', Anchor('aaaa',1), Anchor('zwwz',4), 1),
-                            ('zwwz', Anchor('zwwz',4), Anchor('tqqz',3), 4)
+                            ('aaaa', 'aaaa', 'zwwz', 1),
+                            ('zwwz', 'zwwz', 'tqqz', 4)
                         ]
                     },
                 ),
@@ -647,7 +694,7 @@ class DBWriteTests(DBTests):
                 'args_outs': (
                     {
                         'args': {'a': 'a'},
-                        'final': [Anchor('n', None), Anchor('z', None)]
+                        'final': [('n', None), ('z', None)]
                     },
                 ),
             },
@@ -667,19 +714,19 @@ class DBWriteTests(DBTests):
                 'args_outs': (
                     {
                         'args': {'a': 'a*'},
-                        'final': [Anchor('bzzi', None), Anchor('vzzi', None)]
+                        'final': [('bzzi', None), ('vzzi', None)]
                     },
                     {
                         'args': {'a': '*z*'},
-                        'final': [Anchor('aaaa', None),]
+                        'final': [('aaaa', None),]
                     },
                     {
                         'args': {'a': '*i'},
-                        'final': [Anchor('aaaa', None), Anchor('azzz', None)]
+                        'final': [('aaaa', None), ('azzz', None)]
                     },
                     {
                         'args': {'a': '?z?i'},
-                        'final': [Anchor('aaaa', None), Anchor('azzz', None)]
+                        'final': [('aaaa', None), ('azzz', None)]
                     },
                 ),
             },
@@ -702,19 +749,11 @@ class DBWriteTests(DBTests):
                 'args_outs': (
                     {
                         'args': {'a': 'a', 'd': -10},
-                        'final': [
-                            Anchor('a', -10),
-                            Anchor('z', 0),
-                            ('r', Anchor('a', -10), Anchor('z', 0), None),
-                        ]
+                        'final': [('a', -10), ('z', 0), ('r', 'a', 'z', None),]
                     },
                     {
                         'args': {'a': 'a', 'd': 10},
-                        'final': [
-                            Anchor('a', 10),
-                            Anchor('z', 0),
-                            ('r', Anchor('a', 10), Anchor('z', 0), None),
-                        ]
+                        'final': [('a', 10), ('z', 0), ('r', 'a', 'z', None),]
                     },
                 ),
             },
@@ -738,12 +777,12 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'a': '*', 'd': 0.36, 'q_eq':0},
                         'final': [
-                            Anchor('a', 0.36),
-                            Anchor('g', 1.4),
-                            Anchor('m', 2.8),
-                            Anchor('s', 0.72),
-                            Anchor('z', 0.36),
-                            ('r', Anchor('a', 0.36), Anchor('z', 0.36), None)
+                            ('a', 0.36),
+                            ('g', 1.4),
+                            ('m', 2.8),
+                            ('s', 0.72),
+                            ('z', 0.36),
+                            ('r', 'a', 'z', None)
                         ]
                     },
                 )
@@ -769,25 +808,25 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'a': '?f?', 'd': -5},
                         'final': [
-                            Anchor('tfa', 15),
-                            Anchor('tfb', 25),
-                            Anchor('tra', 40),
-                            Anchor('trb', 50),
-                            Anchor('ma', 1000),
-                            Anchor('k', 0),
-                            ('tfa', Anchor('tfa', 15), Anchor('k', 0), None)
+                            ('tfa', 15),
+                            ('tfb', 25),
+                            ('tra', 40),
+                            ('trb', 50),
+                            ('ma', 1000),
+                            ('k', 0),
+                            ('tfa', 'tfa', 'k', None)
                         ]
                     },
                     {
                         'args': {'a': 't*', 'd': 273},
                         'final': [
-                            Anchor('tfa', 293),
-                            Anchor('tfb', 303),
-                            Anchor('tra', 313),
-                            Anchor('trb', 323),
-                            Anchor('ma', 1000),
-                            Anchor('k', 0),
-                            ('tfa', Anchor('tfa', 293), Anchor('k', 0), None)
+                            ('tfa', 293),
+                            ('tfb', 303),
+                            ('tra', 313),
+                            ('trb', 323),
+                            ('ma', 1000),
+                            ('k', 0),
+                            ('tfa', 'tfa', 'k', None)
                         ]
                     },
                 )
@@ -811,7 +850,7 @@ class DBWriteTests(DBTests):
                 'args_outs': (
                     {
                         'args': {'a': 'a'},
-                        'final': [Anchor('a', None),]
+                        'final': [('a', None),]
                     },
                 ),
             },
@@ -826,11 +865,11 @@ class DBWriteTests(DBTests):
                 'args_outs': (
                     {
                         'args': {'a': 'a', 'q': 1.414},
-                        'final': [Anchor('a', 1.414),]
+                        'final': [('a', 1.414),]
                     },
                     {
                         'args': {'a': 'a', 'q': 1},
-                        'final': [Anchor('a', 1),]
+                        'final': [('a', 1),]
                     },
                 ),
             },
@@ -896,19 +935,11 @@ class DBWriteTests(DBTests):
                 'args_outs': (
                     {
                         'args': {'s': 'z', 'q': 2},
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('z', Anchor('a', 1), Anchor('z', 2), 0)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', 0)]
                     },
                     {
                         'args': {'s': 'z', 'q': -2},
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', -2),
-                            ('z', Anchor('a', 1), Anchor('z', -2), 0)
-                        ]
+                        'final': [('a', 1), ('z', -2), ('z', 'a', 'z', 0)]
                     },
                 ),
             },
@@ -933,25 +964,25 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'s': 'v*', 'q': 0.1, 'q_eq': 0},
                         'final': [
-                            Anchor('vx1', 0.1),
-                            Anchor('vx2', 0.1),
-                            Anchor('ax1', 1.0),
-                            Anchor('ax2', 2.0),
-                            Anchor('vg', 0.5),
-                            Anchor('r', 0),
-                            ('v', Anchor('vg', 0.5), Anchor('r', 0), 0)
+                            ('vx1', 0.1),
+                            ('vx2', 0.1),
+                            ('ax1', 1.0),
+                            ('ax2', 2.0),
+                            ('vg', 0.5),
+                            ('r', 0),
+                            ('v', 'vg', 'r', 0)
                         ]
                     },
                     {
                         'args': {'s': '*', 'q': 0.1, 'q_eq': 0},
                         'final': [
-                            Anchor('vx1', 0.1),
-                            Anchor('vx2', 0.1),
-                            Anchor('ax1', 1.0),
-                            Anchor('ax2', 2.0),
-                            Anchor('vg', 0.5),
-                            Anchor('r', 0.1),
-                            ('v', Anchor('vg', 0.5), Anchor('r', 0.1), 0)
+                            ('vx1', 0.1),
+                            ('vx2', 0.1),
+                            ('ax1', 1.0),
+                            ('ax2', 2.0),
+                            ('vg', 0.5),
+                            ('r', 0.1),
+                            ('v', 'vg', 'r', 0)
                         ]
                     },
                 )
@@ -977,25 +1008,25 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'s': 'v*', 'q': 0},
                         'final': [
-                            Anchor('vx1', 0),
-                            Anchor('vx2', 0),
-                            Anchor('ax1', 1.0),
-                            Anchor('ax2', 2.0),
-                            Anchor('vg', 0),
-                            Anchor('r', 0),
-                            ('v', Anchor('vg', 0), Anchor('r', 0), None)
+                            ('vx1', 0),
+                            ('vx2', 0),
+                            ('ax1', 1.0),
+                            ('ax2', 2.0),
+                            ('vg', 0),
+                            ('r', 0),
+                            ('v', 'vg', 'r', None)
                         ]
                     },
                     {
                         'args': {'s': '?x?', 'q': 0},
                         'final': [
-                            Anchor('vx1', 0),
-                            Anchor('vx2', 0),
-                            Anchor('ax1', 0),
-                            Anchor('ax2', 0),
-                            Anchor('vg', 0.5),
-                            Anchor('r', 0),
-                            ('v', Anchor('vg', 0.5), Anchor('r', 0), None)
+                            ('vx1', 0),
+                            ('vx2', 0),
+                            ('ax1', 0),
+                            ('ax2', 0),
+                            ('vg', 0.5),
+                            ('r', 0),
+                            ('v', 'vg', 'r', None)
                         ]
                     },
                 )
@@ -1029,23 +1060,23 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'a_from': 'a'},
                         'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            Anchor('Rza0', 88),
-                            Anchor('Rza1', 99),
-                            ('Rza0', Anchor('z', 2), Anchor('a', 1), 0),
-                            ('Rza1', Anchor('z', 2), Anchor('a', 1), 1)
+                            ('a', 1),
+                            ('z', 2),
+                            ('Rza0', 88),
+                            ('Rza1', 99),
+                            ('Rza0', 'z', 'a', 0),
+                            ('Rza1', 'z', 'a', 1)
                         ]
                     },
                     {
                         'args': {'a_to': 'a'},
                         'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            Anchor('Rza0', 88),
-                            Anchor('Rza1', 99),
-                            ('Raz0', Anchor('a', 1), Anchor('z', 2), 0),
-                            ('Raz1', Anchor('a', 1), Anchor('z', 2), 1)
+                            ('a', 1),
+                            ('z', 2),
+                            ('Rza0', 88),
+                            ('Rza1', 99),
+                            ('Raz0', 'a', 'z', 0),
+                            ('Raz1', 'a', 'z', 1)
                         ]
                     },
                 ),
@@ -1070,21 +1101,13 @@ class DBWriteTests(DBTests):
                         'args': {
                             'name': 'z', 'a_from':'a', 'a_to':'z', 'd': 10
                         },
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('z', Anchor('a', 1), Anchor('z', 2), 10)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', 10)]
                     },
                     {
                         'args': {
                             'name': 'z', 'a_from':'a', 'a_to':'z', 'd': -10
                         },
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('z', Anchor('a', 1), Anchor('z', 2), -10)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', -10)]
                     },
                 ),
             },
@@ -1117,15 +1140,15 @@ class DBWriteTests(DBTests):
                             'd': 5
                         },
                         'final': [
-                            Anchor('qx1', 10),
-                            Anchor('qx2', 20),
-                            Anchor('ca1', 30),
-                            Anchor('cb1', 40),
-                            Anchor('cb2', 50),
-                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 10),
-                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 20),
-                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 35),
-                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
+                            ('qx1', 10),
+                            ('qx2', 20),
+                            ('ca1', 30),
+                            ('cb1', 40),
+                            ('cb2', 50),
+                            ('Lx0', 'ca1', 'qx1', 10),
+                            ('Lx1', 'ca1', 'qx2', 20),
+                            ('Ln0', 'ca1', 'cb1', 35),
+                            ('Ln1', 'ca1', 'cb2', 40),
                         ]
                     },
                     {
@@ -1137,15 +1160,15 @@ class DBWriteTests(DBTests):
                             'd': 5
                         },
                         'final': [
-                            Anchor('qx1', 10),
-                            Anchor('qx2', 20),
-                            Anchor('ca1', 30),
-                            Anchor('cb1', 40),
-                            Anchor('cb2', 50),
-                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 15),
-                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 20),
-                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 30),
-                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
+                            ('qx1', 10),
+                            ('qx2', 20),
+                            ('ca1', 30),
+                            ('cb1', 40),
+                            ('cb2', 50),
+                            ('Lx0', 'ca1', 'qx1', 15),
+                            ('Lx1', 'ca1', 'qx2', 20),
+                            ('Ln0', 'ca1', 'cb1', 30),
+                            ('Ln1', 'ca1', 'cb2', 40),
                         ]
                     },
                 ),
@@ -1175,15 +1198,15 @@ class DBWriteTests(DBTests):
                             'name': 'Lx*', 'a_from': '*', 'a_to': '*', 'd': 5
                         },
                         'final': [
-                            Anchor('qx1', 10),
-                            Anchor('qx2', 20),
-                            Anchor('ca1', 30),
-                            Anchor('cb1', 40),
-                            Anchor('cb2', 50),
-                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 15),
-                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 25),
-                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 30),
-                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
+                            ('qx1', 10),
+                            ('qx2', 20),
+                            ('ca1', 30),
+                            ('cb1', 40),
+                            ('cb2', 50),
+                            ('Lx0', 'ca1', 'qx1', 15),
+                            ('Lx1', 'ca1', 'qx2', 25),
+                            ('Ln0', 'ca1', 'cb1', 30),
+                            ('Ln1', 'ca1', 'cb2', 40),
                         ]
                     },
                     {
@@ -1191,15 +1214,15 @@ class DBWriteTests(DBTests):
                             'name': '*', 'a_from': '*1', 'a_to': '*1', 'd': 5
                         },
                         'final': [
-                            Anchor('qx1', 10),
-                            Anchor('qx2', 20),
-                            Anchor('ca1', 30),
-                            Anchor('cb1', 40),
-                            Anchor('cb2', 50),
-                            ('Lx0', Anchor('ca1',30), Anchor('qx1',10), 15),
-                            ('Lx1', Anchor('ca1',30), Anchor('qx2',20), 20),
-                            ('Ln0', Anchor('ca1',30), Anchor('cb1',40), 35),
-                            ('Ln1', Anchor('ca1',30), Anchor('cb2',50), 40),
+                            ('qx1', 10),
+                            ('qx2', 20),
+                            ('ca1', 30),
+                            ('cb1', 40),
+                            ('cb2', 50),
+                            ('Lx0', 'ca1', 'qx1', 15),
+                            ('Lx1', 'ca1', 'qx2', 20),
+                            ('Ln0', 'ca1', 'cb1', 35),
+                            ('Ln1', 'ca1', 'cb2', 40),
                         ]
                     },
                 ),
@@ -1222,31 +1245,19 @@ class DBWriteTests(DBTests):
                 'args_outs': (
                     {
                         'args': {'rel': 'Raz', 'a_from':'a', 'a_to':'z'},
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('Raz', Anchor('a', 1), Anchor('z', 2), None)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('Raz', 'a', 'z', None)]
                     },
                     {
                         'args': {
                             'rel': 'Raz', 'a_from':'a', 'a_to':'z', 'q': 12
                         },
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('Raz', Anchor('a', 1), Anchor('z', 2), 12)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('Raz', 'a', 'z', 12)]
                     },
                     {
                         'args': {
                             'rel': 'Raz', 'a_from':'a', 'a_to':'z', 'q': 1.2
                         },
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('Raz', Anchor('a', 1), Anchor('z', 2), 1.2)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('Raz', 'a', 'z', 1.2)]
                     },
                 ),
             },
@@ -1267,21 +1278,21 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'rel': 'R2', 'a_from':'a', 'a_to':'z', 'q':4},
                         'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('R0', Anchor('a', 1), Anchor('z', 2), None),
-                            ('R1', Anchor('z', 2), Anchor('a', 1), None),
-                            ('R2', Anchor('a', 1), Anchor('z', 2), 4)
+                            ('a', 1),
+                            ('z', 2),
+                            ('R0', 'a', 'z', None),
+                            ('R1', 'z', 'a', None),
+                            ('R2', 'a', 'z', 4)
                         ]
                     },
                     {
                         'args': {'rel': 'R3', 'a_from':'z', 'a_to':'a', 'q':8},
                         'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('R0', Anchor('a', 1), Anchor('z', 2), None),
-                            ('R1', Anchor('z', 2), Anchor('a', 1), None),
-                            ('R3', Anchor('z', 2), Anchor('a', 1), 8)
+                            ('a', 1),
+                            ('z', 2),
+                            ('R0', 'a', 'z', None),
+                            ('R1', 'z', 'a', None),
+                            ('R3', 'z', 'a', 8)
                         ]
                     },
                 ),
@@ -1310,7 +1321,7 @@ class DBWriteTests(DBTests):
                             'rel':'r', 'a_from':'a', 'a_to':'z', 'q':':('
                         },
                         'exception': 'TypeError',
-                        'final': [Anchor('a', 1), Anchor('z', 2),]
+                        'final': [('a', 1), ('z', 2),]
                     },
                 ),
             },
@@ -1324,22 +1335,22 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'rel': '', 'a_from': 'a', 'a_to': 'z'},
                         'exception': 'ValueError',
-                        'final': [Anchor('a', None), Anchor('z', None)],
+                        'final': [('a', None), ('z', None)],
                     },
                     {
                         'args': {'rel': 'r', 'a_from': '', 'a_to': 'z'},
                         'exception': 'ValueError',
-                        'final': [Anchor('a', None), Anchor('z', None)],
+                        'final': [('a', None), ('z', None)],
                     },
                     {
                         'args': {'rel': 'r', 'a_from': 'a', 'a_to': ''},
                         'exception': 'ValueError',
-                        'final': [Anchor('a', None), Anchor('z', None)],
+                        'final': [('a', None), ('z', None)],
                     },
                     {
                         'args': {'rel': 'r', 'a_from': '', 'a_to': ''},
                         'exception': 'ValueError',
-                        'final': [Anchor('a', None), Anchor('z', None)],
+                        'final': [('a', None), ('z', None)],
                     },
                 ),
             },
@@ -1353,45 +1364,31 @@ class DBWriteTests(DBTests):
                         'subtest_name': 'put_rel_duplicate_no_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'z'},
                         'exception': 'ValueError',
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('r', Anchor('a', 1), Anchor('z', 2), None)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('r', 'a', 'z', None)]
                     },
                     {
                         'subtest_name': 'put_rel_duplicate_set_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'z', 'q': 99},
                         'exception': 'ValueError',
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('r', Anchor('a', 1), Anchor('z', 2), None)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('r', 'a', 'z', None)]
                     },
                 ),
             },
             'put_rel_self_link': {
                 'method': 'put_rel',
-                'init': (
-                    ('a', 1),
-                ),
+                'init': (('a', 1),),
                 'args_outs': (
                     {
                         'subtest_name': 'put_rel_self_link_no_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'a'},
                         'exception': 'ValueError',
-                        'final': [
-                            Anchor('a', 1),
-                        ]
+                        'final': [('a', 1),]
                     },
                     {
                         'subtest_name': 'put_rel_self_link_set_q',
                         'args': {'rel':'r', 'a_from':'a', 'a_to':'a', 'q': 99},
                         'exception': 'ValueError',
-                        'final': [
-                            Anchor('a', 1),
-                        ]
+                        'final': [('a', 1),]
                     },
                 ),
             }
@@ -1410,22 +1407,14 @@ class DBWriteTests(DBTests):
                         'args': {
                             'name': 'z', 'a_from':'a', 'a_to':'z', 'q': 2
                         },
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('z', Anchor('a', 1), Anchor('z', 2), 2)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', 2)]
                     },
                     {
                         'subtest_name': 'set_rel_q_exact_rel_neg',
                         'args': {
                             'name': 'z', 'a_from':'a', 'a_to':'z', 'q': -2
                         },
-                        'final': [
-                            Anchor('a', 1),
-                            Anchor('z', 2),
-                            ('z', Anchor('a', 1), Anchor('z', 2), -2)
-                        ]
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', -2)]
                     },
                 ),
             },
@@ -1449,15 +1438,15 @@ class DBWriteTests(DBTests):
                             'name': 'Lx*', 'a_from': '*', 'a_to': '*', 'q': 100
                         },
                         'final': [
-                            Anchor('qx1', 0),
-                            Anchor('qx2', 0),
-                            Anchor('ca1', 0),
-                            Anchor('cb1', 0),
-                            Anchor('cb2', 0),
-                            ('Lx0', Anchor('ca1',0), Anchor('qx1',0), 100),
-                            ('Lx1', Anchor('ca1',0), Anchor('qx2',0), 100),
-                            ('Ln0', Anchor('ca1',0), Anchor('cb1',0), 0),
-                            ('Ln1', Anchor('ca1',0), Anchor('cb2',0), 0),
+                            ('qx1', 0),
+                            ('qx2', 0),
+                            ('ca1', 0),
+                            ('cb1', 0),
+                            ('cb2', 0),
+                            ('Lx0', 'ca1', 'qx1', 100),
+                            ('Lx1', 'ca1', 'qx2', 100),
+                            ('Ln0', 'ca1', 'cb1', 0),
+                            ('Ln1', 'ca1', 'cb2', 0),
                         ]
                     },
                     {
@@ -1466,15 +1455,15 @@ class DBWriteTests(DBTests):
                             'name': '*', 'a_from': '*1', 'a_to': '*1', 'q': 100
                         },
                         'final': [
-                            Anchor('qx1', 0),
-                            Anchor('qx2', 0),
-                            Anchor('ca1', 0),
-                            Anchor('cb1', 0),
-                            Anchor('cb2', 0),
-                            ('Lx0', Anchor('ca1',0), Anchor('qx1',0), 100),
-                            ('Lx1', Anchor('ca1',0), Anchor('qx2',0), 0),
-                            ('Ln0', Anchor('ca1',0), Anchor('cb1',0), 100),
-                            ('Ln1', Anchor('ca1',0), Anchor('cb2',0), 0),
+                            ('qx1', 0),
+                            ('qx2', 0),
+                            ('ca1', 0),
+                            ('cb1', 0),
+                            ('cb2', 0),
+                            ('Lx0', 'ca1', 'qx1', 100),
+                            ('Lx1', 'ca1', 'qx2', 0),
+                            ('Ln0', 'ca1', 'cb1', 100),
+                            ('Ln1', 'ca1', 'cb2', 0),
                         ]
                     },
                 ),
@@ -1492,7 +1481,7 @@ class DBWriteTests(DBTests):
                         'subtest_name': '_run_tests_ex_invalid_args',
                         'args': {},
                         'exception': 'ValueError',
-                        'final': [ Anchor('a', 1), Anchor('z', 2), ]
+                        'final': [('a', 1), ('z', 2),]
                     },
                 ),
             },

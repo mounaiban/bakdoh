@@ -35,22 +35,20 @@ def anchor_from_row(repo, row):
     NOTE: Aliased relations do not yet work with this function
 
     """
-    # TODO: row can be (a, q) or (n, af, at, q)
-    # relations returned have accurate q-values, but the relation
-    # is not validated. non-existent relations can be returned
-    # by this function
-
+    # Relations are not validated; non-existent relations can
+    # be returned by this function
     ts = list(map(lambda x:type(x), row))
-    # row format: (anchor_content, anchor_q_val)
     if len(row) == 2:
+        # row format: (anchor_content, anchor_q_val)
         if ts in valid_types_a:
-            return Anchor(row[0], row[1], get_q=False)
+            return (row[0], row[1])
     if len(row) == 4:
+        # row format: (rel_name, a_from_content, a_to_content, q)
         if ts in valid_types_rel:
             return (
                 row[0],
-                direct_select_all(repo, term=row[1])[0],
-                direct_select_all(repo, term=row[2])[0],
+                direct_select_all(repo, term=row[1])[0][0],
+                direct_select_all(repo, term=row[2])[0][0],
                 row[3]
             ) # PROTIP: direct_select_all returns only lists so
               # the [0] is needed
@@ -301,7 +299,7 @@ class SLRPutATests(TestCase):
         for d in data:
             testrep.put_a(d, None)
         ##
-        expected = [Anchor(r"&#8680;X&#8680;", None),]
+        expected = [(r"&#8680;X&#8680;", None),]
         samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
@@ -318,9 +316,7 @@ class SLRPutATests(TestCase):
         for d in data:
             testrep.put_a(d, 1)
         ##
-        expected = [
-            Anchor(r"&#64;X" + "\u0040", 1), Anchor(r"&#8714;X" + "\u220a", 1)
-        ]
+        expected = [(r"&#64;X" + "\u0040", 1), (r"&#8714;X" + "\u220a", 1)]
         samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
@@ -333,7 +329,7 @@ class SLRPutATests(TestCase):
         for d in data:
             testrep.put_a(d, None)
         ##
-        expected = [Anchor(x, None) for x in data]
+        expected = [(x, None) for x in data]
         samp = direct_select_all(testrep)
         self.assertEqual(samp, expected)
 
