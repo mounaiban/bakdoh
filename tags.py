@@ -21,23 +21,9 @@ from json import JSONEncoder
 from html import unescape
 from itertools import chain
 
-# Reserved symbols that cannot be used in anchors
-CHAR_REL = "\u21e8"     # Arrow Right
-CHARS_R = {"REL_START": CHAR_REL}
-
-# Reserved symbols that cannot be used as the first character
-# of anchors
-CHARS_R_PX = {
-    "A_ID": "\u0040",   # At-Sign
-    "TYPEOF": "\u220a", # Small Element-of Symbol
-}
-chars_r_px_list = [s for s in CHARS_R_PX.values()]
-
-# Reserved symbols used as wildcards in queries
-CHARS_R_WC = {
-    "WILDCARD_ONE": "\u003f",   # Question mark
-    "WILDCARD_ZEROPLUS": "\u002a",  # Asterisk
-}
+# Reserved symbols used as TAGS wildcards (same as Unix glob)
+CHAR_WC_1C = "\u002a" # single char only: Asterisk
+CHAR_WC_ZP = "\u003f" # zero or more chars: Question mark
 
 # NOTE: Escape sequences are used for the sake of precision,
 # based on the awareness that multiple forms of the symbols
@@ -543,34 +529,29 @@ class SQLiteRepo:
     Repository to manage a TAGS database in storage, using SQLite 3
 
     """
-    CHARS_R_WC_SLR = {
-        "WILDCARD_ONE": "\u005f",   # Question Mark
-        "WILDCARD_ZEROPLUS": "\u0025", # Percent Sign
+    CHAR_WC_ZP_SQL = "\u005f" # Question Mark
+    CHAR_WC_1C_SQL = "\u0025" # Percent Sign
+    CHARS_DB_DEFAULT = {
+        'CHAR_F_REL_SQL': "\u21e8", # relation marker (Arrow to the right)
+        'CHAR_PX_AL_SQL': "\u0040", # alias marker (At-sign)
+        'CHAR_PX_T_SQL': "\u220a",  # type marker (Small element-of symbol)
     }
     table_a = "a"
-    trans_wc = {}  # see wildcard dict preparation code below
-    escape_a = uesc_dict(CHARS_R)
-    escape_px = uesc_dict(CHARS_R_PX)
+    table_config = "config"
     col = "content"
     col_q = "q"
+    col_config_key = "key"
+    col_config_value = "v"
     limit = 32
     escape = '\\'
-    _test_sample = {
-        "R": ["{0}X{0}".format(x) for x in CHARS_R.values()],
-        "R_PX": ["{0}X{0}".format(x) for x in CHARS_R_PX.values()],
-        "WC": ["{0}X{0}".format(x) for x in CHARS_R_WC.values()],
-        "WC_SLR": ["{0}X{0}".format(x) for x in CHARS_R_WC_SLR.values()],
-    } # strings containing reserved chars for unit test use
+    trans_wc = {
+        CHAR_WC_1C: CHAR_WC_1C_SQL,
+        CHAR_WC_ZP: CHAR_WC_ZP_SQL,
+        CHAR_WC_1C_SQL: "{}{}".format(escape, CHAR_WC_1C_SQL),
+        CHAR_WC_ZP_SQL: "{}{}".format(escape, CHAR_WC_ZP_SQL)
+    }
 
-    # Prepare wildcard translation dict
-    #  change TAGS wildcards to SQL wildcards
-    for k in CHARS_R_WC.keys():
-        trans_wc[ord(CHARS_R_WC[k])] = CHARS_R_WC_SLR[k]
-    #  escape SQL wildcard characters
-    for v in CHARS_R_WC_SLR.values():
-        trans_wc[ord(v)] = r"{}{}".format(escape, v)
-
-    def __init__(self, db_path=None, mode="rwc"):
+    def __init__(self, db_path=None, mode="rwc", **kwargs):
         """
         Examples
         ========
@@ -600,18 +581,39 @@ class SQLiteRepo:
         * All in-memory databases are read-write
 
         """
+        # TODO: Allow user to set database-local special characters
         if db_path is None:
             db_path = "test.sqlite3"
             mode = 'memory'
         uri = "file:{}?mode={}".format(db_path, mode)
+        self._char_rel = None
+        self._chars_px = ""
+        self._chars_f_escape = {}
         self._db_path = db_path
         self._db_conn = sqlite3.connect(uri, uri=True)
         self._db_cus = None
+        self._config = None
+        self._test_chars = {"PX": "", "F": "",}
+            # standard test char patterns:
+            # PX => special prefix chars, F => special characters
+        self.trans_wc = str.maketrans(self.trans_wc)
         try:
             self._slr_ck_tables()
         except sqlite3.OperationalError as x:
             if 'no such table' in x.args[0]:
                 self._slr_create_tables()
+                self._slr_dict_to_config(self.CHARS_DB_DEFAULT)
+        self._config = self._slr_config_to_dict()
+        for k in self._config:
+            if k.startswith('CHAR_F'):
+                c = self._config[k]
+                self._chars_f_escape[ord(c)] = "&#{};".format(ord(c))
+                self._test_chars['F'] = c
+            if k.startswith('CHAR_PX'):
+                self._chars_px = "".join((self._chars_px, self._config[k]))
+                self._test_chars['PX'] = self._config[k]
+            self._char_rel = self._config['CHAR_F_REL_SQL']
+            self._char_alias = self._config['CHAR_PX_AL_SQL']
 
     def _prep_term(self, term):
         """
@@ -621,7 +623,8 @@ class SQLiteRepo:
         to integer ROWIDs.
 
         """
-        if term.startswith(CHARS_R_PX['A_ID']): return int(term[1:])
+        if term.startswith(self._config['CHAR_PX_AL_SQL']):
+            return int(term[1:])
         else: return unescape(term.translate(self.trans_wc))
 
     def _prep_a(self, a):
@@ -630,11 +633,12 @@ class SQLiteRepo:
         reserved characters into escape codes as necessary
         """
         out = ""
-        if a[0] in chars_r_px_list:
-            out = "".join((a[0].translate(self.escape_px), a[1:]))
+        p = a[0]
+        if p in self._chars_px:
+            out = "".join((r"&#{};".format(ord(p)), a[1:]))
         else:
             out = a
-        return out.translate(self.escape_a)
+        return out.translate(self._chars_f_escape)
 
     def _slr_ck_anchors_exist(self, **kwargs):
         """
@@ -656,7 +660,7 @@ class SQLiteRepo:
         )
         for a in anchors:
             term = None
-            if a.startswith(CHARS_R_PX['A_ID']):
+            if a.startswith(self._char_rel):
                 sc = sc_ck_alias
                 term = int(a[1:])
             else:
@@ -698,11 +702,19 @@ class SQLiteRepo:
         Prepare the anchor table in a new SQLite database file
 
         """
-        sc = 'CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {})'.format(
-            self.table_a, self.col, self.col_q
-        )
+        sc_table_a = """
+            CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {})
+            """.format(self.table_a, self.col, self.col_q)
+        sc_table_c = """
+            CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {} NOT NULL)
+            """.format(
+                self.table_config,
+                self.col_config_key,
+                self.col_config_value
+            )
         cs = self._slr_get_shared_cursor()
-        cs.execute(sc)
+        cs.execute(sc_table_a)
+        cs.execute(sc_table_c)
 
     def _slr_set_q(self, ae, q, is_rel=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
@@ -756,7 +768,7 @@ class SQLiteRepo:
         # statement can vary from one to three, depending
         # on the arguments in use.
         cs = kwargs.get('cursor', self._db_conn.cursor())
-        return cs.execute(sc, params)
+        return ((unescape(c), q) for c, q in cs.execute(sc, params))
 
     def _slr_get_shared_cursor(self):
         if not self._db_cus:
@@ -770,6 +782,24 @@ class SQLiteRepo:
         term = self._prep_term(a)
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, (term,))
+
+    def _slr_config_to_dict(self):
+        """Reads database config table into dict"""
+        sc = "SELECT {},{} FROM {}".format(
+            self.col_config_key, self.col_config_value, self.table_config
+        )
+        cs = self._db_conn.cursor()
+        rows = cs.execute(sc)
+        out = {}
+        for r in rows: out[r[0]] = r[1]
+        return out
+
+    def _slr_dict_to_config(self, confdict):
+        """Writes a dict to the database config table"""
+        sc = "INSERT INTO {} VALUES(?,?)".format(self.table_config)
+        cs = self._slr_get_shared_cursor()
+        for k in confdict:
+            cs.execute(sc, (k, confdict[k]))
 
     def _slr_insert_into_a(self, item, q):
         """
@@ -808,7 +838,10 @@ class SQLiteRepo:
             )
         if not is_rel:
             out = "".join(
-                (out, "AND {} NOT LIKE '%{}%' ".format(self.col, CHAR_REL))
+                (out, "AND {} NOT LIKE '%{}%' ".format(
+                        self.col, self._char_rel
+                    )
+                )
             )
         return out
 
@@ -949,10 +982,12 @@ class SQLiteRepo:
                 raise ValueError('both anchors must have ROWIDs')
             if rid1 and rid2:
                 if alias_fmt & 1:
-                    at = "{}{}".format(CHARS_R_PX['A_ID'], rid2)
+                    at = "{}{}".format(self._char_alias, rid2)
                 if alias_fmt & 2:
-                    af = "{}{}".format(CHARS_R_PX['A_ID'], rid1)
-        return '{}{}{}{}{}'.format(namee, CHAR_REL, af, CHAR_REL, at)
+                    af = "{}{}".format(self._char_alias, rid1)
+        return '{}{}{}{}{}'.format(
+            namee, self._char_rel, af, self._char_rel, at
+        )
 
     def get_a(self, a, **kwargs):
         """Handle DB request to return an iterator of anchors.
@@ -970,7 +1005,7 @@ class SQLiteRepo:
           future releases.
 
         """
-        is_alias = a.startswith(CHARS_R_PX['A_ID'])
+        is_alias = a.startswith(self._char_rel)
         return self._slr_get_a(
             self._prep_term(a), is_alias=is_alias, is_rel=False, **kwargs
         )
@@ -1120,14 +1155,13 @@ class SQLiteRepo:
         """
         sc_relnames = """
                 SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
-            """.format(self.col, CHAR_REL, self.table_a)
+            """.format(self.col, self._char_rel, self.table_a)
         sc_where = self._slr_a_where_clause(is_rel=True)
         sc = "".join((sc_relnames, sc_where))
-        wczp = CHARS_R_WC['WILDCARD_ZEROPLUS']
         term = self._prep_term(self.reltxt(
             s,
-            kwargs.get('a_from', wczp),
-            kwargs.get('a_to', wczp)
+            kwargs.get('a_from', CHAR_WC_ZP),
+            kwargs.get('a_to', CHAR_WC_ZP)
         ))
         cs = kwargs.get('cursor', self._slr_get_shared_cursor())
         return cs.execute(sc, (term,))
@@ -1150,5 +1184,5 @@ class SQLiteRepo:
                 kwargs[n] = self._prep_term(kwargs[n])
         term = self.reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
         rels = self._slr_get_a(term, is_rel=True, **kwargs)
-        return (r[0].split(CHAR_REL)+[r[1],] for r in rels)
+        return (r[0].split(self._char_rel)+[r[1],] for r in rels)
 

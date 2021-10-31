@@ -16,7 +16,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tags import Anchor, CHAR_REL, CHARS_R_PX, SQLiteRepo
+from tags import Anchor, CHAR_WC_1C, CHAR_WC_ZP, SQLiteRepo
 from tests.db import DB, DBGetTests, DBWriteTests
 from unittest import TestCase
 
@@ -245,6 +245,8 @@ class SLR_ReltextTests(TestCase):
         testrep = SQLiteRepo()
         data = [('a', None), ('z', None)]
         direct_insert(testrep, data)
+        char_rel = testrep._char_rel
+        char_alias = testrep._char_alias
         argtests = (
             (
                 {
@@ -254,7 +256,7 @@ class SLR_ReltextTests(TestCase):
                     'alias': 'local',
                     'alias_fmt': 0
                 },
-                'Raz{0}a{0}z'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+                'Raz{0}a{0}z'.format(char_rel)
             ),
             (
                 {
@@ -264,7 +266,7 @@ class SLR_ReltextTests(TestCase):
                     'alias': 'local',
                     'alias_fmt': 1
                 },
-                'Raz{0}a{0}{1}2'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+                'Raz{0}a{0}{1}2'.format(char_rel, char_alias)
             ),
             (
                 {
@@ -274,7 +276,7 @@ class SLR_ReltextTests(TestCase):
                     'alias': 'local',
                     'alias_fmt': 2
                 },
-                'Raz{0}{1}1{0}z'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+                'Raz{0}{1}1{0}z'.format(char_rel, char_alias)
             ),
             (
                 {
@@ -284,7 +286,7 @@ class SLR_ReltextTests(TestCase):
                     'alias': 'local',
                     'alias_fmt': 3
                 },
-                'Raz{0}{1}1{0}{1}2'.format(CHAR_REL, CHARS_R_PX['A_ID'])
+                'Raz{0}{1}1{0}{1}2'.format(char_rel, char_alias)
             ),
 
         ) # format: (kwargs, expected_output)
@@ -355,37 +357,48 @@ class SLRGetATests(TestCase):
     """Tests for get_a()"""
 
     def test_get_a_exact_sql_wildcard_escape(self):
-        """Get anchor containing SQL wildcard characters"""
-        testrep = SQLiteRepo()
-        inputs = testrep._test_sample['WC_SLR']
-        for i in inputs:
-            direct_insert(testrep, ((i, None),))
-            with self.subTest(a=i):
-                samp = [x for x in testrep.get_a(i)]
-                self.assertEqual(samp, [(i, None),])
+        """Get single anchor containing SQL wildcard characters"""
+        testdb = DB(SQLiteRepo())
+        chars = (SQLiteRepo.CHAR_WC_ZP_SQL, SQLiteRepo.CHAR_WC_1C_SQL)
+        data = [(x, 100) for x in chars]
+        testdb.import_data(data)
+        for c in chars:
+            with self.subTest(char=c):
+                sample = list(
+                    testdb.get_a("{}*".format(c), out_format='interchange')
+                )
+                self.assertEqual(sample, [(c, 100)])
 
     def test_get_a_sql_wildcard_escape(self):
         """Get anchors containing SQL wildcard characters using wildcards"""
-        testrep = SQLiteRepo()
-        inputs = testrep._test_sample['WC_SLR']
-        for i in inputs:
-            k = i[0]
-            data = [("{}{}".format(i, n), None) for n in range(3)]
-            direct_insert(testrep, data)
-            with self.subTest(char=k):
-                samp = [x for x in testrep.get_a("{}*".format(k))]
-                self.assertEqual(samp, data)
+        testdb = DB(SQLiteRepo())
+        t = lambda x: "{0}E{0}".format(x)
+        chars = (SQLiteRepo.CHAR_WC_ZP_SQL, SQLiteRepo.CHAR_WC_1C_SQL)
+        data = [(t(x), 100) for x in chars]
+        testdb.import_data(data)
+        for c in chars:
+            with self.subTest(char=c):
+                sample = list(
+                    testdb.get_a("{}*".format(c), out_format='interchange')
+                )
+                self.assertEqual(sample, [(t(c), 100)])
 
     def test_get_a_wildcard_escape(self):
-        """Get anchors containing wildcard characters using wildcards"""
-        testrep = SQLiteRepo()
-        inputs = testrep._test_sample['WC']
-        for i in inputs:
-            k = i[0]
-            data = [("{}{}".format(i, n), None) for n in range(3)]
-            direct_insert(testrep, data)
-            with self.subTest(char=k):
-                samp = [x for x in testrep.get_a("&#{};*".format(ord(k)))]
+        """Get multiple anchors containing TAGS wildcard characters
+        using wildcards
+
+        """
+        testdb = DB(SQLiteRepo())
+        chars = (CHAR_WC_ZP, CHAR_WC_1C)
+        for c in chars:
+            data = [("{}{}".format(c, n), None) for n in range(3)]
+            testdb.import_data(data)
+            with self.subTest(char=c):
+                samp = list(
+                    testdb.get_a("&#{};*".format(ord(c)),
+                        out_format='interchange'
+                    )
+                )
                 self.assertEqual(samp, data)
 
 class SLRPutATests(TestCase):
@@ -393,14 +406,13 @@ class SLRPutATests(TestCase):
 
     def test_put_a_special_chars(self):
         """Put anchor containing special reserved characters"""
-        testrep = SQLiteRepo()
-        data = testrep._test_sample["R"]
-        #
+        testdb = DB(SQLiteRepo())
+        data = [(x, None) for x in testdb.repo._test_chars["F"]]
+        e = lambda x: "&#{};".format(x)
+        expected = [(x, None) for x in testdb.repo._test_chars["F"]]
         for d in data:
-            testrep.put_a(d, None)
-        ##
-        expected = [(r"&#8680;X&#8680;", None),]
-        samp = direct_select_all(testrep)
+            testdb.put_a(*d)
+        samp = list(testdb.export())
         self.assertEqual(samp, expected)
 
     def test_put_a_special_chars_prefix(self):
@@ -409,27 +421,30 @@ class SLRPutATests(TestCase):
 
         Special prefix characters are allowed to be used as-is in
         anchors, except for the first character.
+
         """
-        testrep = SQLiteRepo()
-        data = testrep._test_sample["R_PX"]
-        #
+        testdb = DB(SQLiteRepo())
+        ei = lambda x: "&#{}uuuuuuu;".format(x)
+        data = [(ei(x), None) for x in testdb.repo._test_chars["PX"]]
+        eo = lambda x: "&#{}uuuuuuu;".format(x)
+        expected = [(eo(x), None) for x in testdb.repo._test_chars["PX"]]
         for d in data:
-            testrep.put_a(d, 1)
-        ##
-        expected = [(r"&#64;X" + "\u0040", 1), (r"&#8714;X" + "\u220a", 1)]
-        samp = direct_select_all(testrep)
+            testdb.put_a(*d)
+        samp = list(testdb.export())
         self.assertEqual(samp, expected)
 
     def test_put_a_special_chars_wildcards(self):
         """Put anchor containing wildcard characters"""
-        testrep = SQLiteRepo()
-        data = testrep._test_sample["WC"]
-        data.extend(testrep._test_sample["WC_SLR"])
-        #
+        testdb = DB(SQLiteRepo())
+        chars = (
+            CHAR_WC_ZP,
+            CHAR_WC_1C,
+            SQLiteRepo.CHAR_WC_ZP_SQL,
+            SQLiteRepo.CHAR_WC_1C_SQL
+        )
+        data = [(x, -10) for x in chars]
         for d in data:
-            testrep.put_a(d, None)
-        ##
-        expected = [(x, None) for x in data]
-        samp = direct_select_all(testrep)
-        self.assertEqual(samp, expected)
+            testdb.put_a(*d)
+        samp = list(testdb.export())
+        self.assertEqual(samp, data)
 
