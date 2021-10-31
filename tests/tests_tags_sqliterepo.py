@@ -16,7 +16,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tags import Anchor, CHAR_WC_1C, CHAR_WC_ZP, SQLiteRepo
+from tags import CHAR_WC_1C, CHAR_WC_ZP, SQLiteRepo
 from tests.db import DB, DBGetTests, DBWriteTests
 from unittest import TestCase
 
@@ -26,84 +26,6 @@ valid_types_rel = (
     [str, str, str, float],
     [str, str, str, type(None)],
 )
-
-def anchor_from_row(repo, row):
-    """
-    Return a mock Anchor object or relation containing Anchor
-    objects from a SQLiteRepo row.
-
-    NOTE: Aliased relations do not yet work with this function
-
-    """
-    # Relations are not validated; non-existent relations can
-    # be returned by this function
-    ts = list(map(lambda x:type(x), row))
-    if len(row) == 2:
-        # row format: (anchor_content, anchor_q_val)
-        if ts in valid_types_a:
-            return (row[0], row[1])
-    if len(row) == 4:
-        # row format: (rel_name, a_from_content, a_to_content, q)
-        if ts in valid_types_rel:
-            return (
-                row[0],
-                direct_select_all(repo, term=row[1])[0][0],
-                direct_select_all(repo, term=row[2])[0][0],
-                row[3]
-            ) # PROTIP: direct_select_all returns only lists so
-              # the [0] is needed
-
-def direct_insert(repo, anchors):
-    """
-    Insert anchors directly into an SQLiteRepo. Uses the same
-    arguments as direct_insert(), see tests.db for details.
-
-    Examples:
-    Insert anchors: direct_insert(repo, (('a1', 0), ('z1', 1)))
-    Insert relation: direct_insert(repo, (('r', 'a1', 'z1', 99),))
-
-    """
-    sc = "INSERT INTO {} VALUES (?,?)".format(SQLiteRepo.table_a)
-    cus = repo._slr_get_shared_cursor()
-    for a in anchors:
-        ts = list(map(lambda x:type(x), a))
-        if len(a) == 4:
-            # relation
-            if ts in valid_types_rel:
-                cus.execute(sc, (repo.reltxt(a[0], a[1], a[2]), a[3]))
-        elif len(a) == 2:
-            # anchor
-            if ts in valid_types_a:
-                cus.execute(sc, (a[0], a[1],))
-
-def direct_select_all(repo, term='*'):
-    """
-    Return a list of anchors and corresponding q values directly
-    from an SQLiteRepo matching an SQL search term.
-
-    If term is not specified, all anchors will be returned.
-
-    NOTE: Aliased relations do not yet work with this function
-
-    """
-    # TODO: direct_select_all should no longer take terms and
-    # just dump the whole thing... when test dbs are small, we
-    # can get away with this. This is to make dump() more repo-
-    # agnostic
-    sc_ck = "SELECT * FROM {} WHERE {} LIKE ? ESCAPE '{}'".format(
-        SQLiteRepo.table_a, SQLiteRepo.col, SQLiteRepo.escape
-    )
-    
-    cus = repo._db_conn.cursor()
-    rows = cus.execute(sc_ck, (repo._prep_term(term),))
-    out = []
-    for r in rows:
-        if CHAR_REL in r[0]:
-            relrow = r[0].split(CHAR_REL) + [r[1],]
-            out.append(anchor_from_row(repo, relrow))
-        else:
-            out.append(anchor_from_row(repo, r))
-    return out
 
 class SlrDbExportTests(TestCase):
     """
@@ -117,7 +39,6 @@ class SlrDbExportTests(TestCase):
     are repository class-specific.
 
     """
-
     def setUp(self):
         # Most direct SQLiteRepo insert humanly possible
         self.testdb = DB(SQLiteRepo())
@@ -236,15 +157,17 @@ class SLR_ReltextTests(TestCase):
 
     def test_reltext_not_exist(self):
         testrep = SQLiteRepo()
+        testdb = DB(testrep)
         data = [('a', None), ('z', None)]
-        direct_insert(testrep, data)
+        testdb.import_data(data)
         with self.assertRaises(ValueError):
-            testrep.reltxt(namee='Rnull', a1e='x', a2e='y', alias='local')
+            testdb.repo.reltxt(namee='Rnull', a1e='x', a2e='y', alias='local')
 
     def test_reltext(self):
         testrep = SQLiteRepo()
+        testdb = DB(testrep)
         data = [('a', None), ('z', None)]
-        direct_insert(testrep, data)
+        testdb.import_data(data)
         char_rel = testrep._char_rel
         char_alias = testrep._char_alias
         argtests = (
@@ -291,8 +214,7 @@ class SLR_ReltextTests(TestCase):
 
         ) # format: (kwargs, expected_output)
         # NOTE: this test makes an assumption that ROWIDs are always
-        # related to the order which an anchor was inserted into the
-        # database.
+        # and strictly in order of insertion of the anchors
         #
         for a in argtests:
             with self.subTest(a=a):
