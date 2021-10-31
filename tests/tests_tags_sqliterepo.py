@@ -17,7 +17,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # limitations under the License.
 
 from tags import Anchor, CHAR_REL, CHARS_R_PX, SQLiteRepo
-from tests.db import DBGetTests, DBWriteTests
+from tests.db import DB, DBGetTests, DBWriteTests
 from unittest import TestCase
 
 valid_types_a = ([str, int], [str, float], [str, type(None)])
@@ -105,6 +105,114 @@ def direct_select_all(repo, term='*'):
             out.append(anchor_from_row(repo, r))
     return out
 
+class SlrDbExportTests(TestCase):
+    """
+    Verify the operation of SQLiteRepo's export function.
+
+    This test relies on the correctness of SQLiteRepo.reltxt().
+    Tests for reltxt() must pass for these tests to be valid.
+
+    Unfortunately, tests for export() cannot be run under the
+    generic DB class test suite as implementations for export()
+    are repository class-specific.
+
+    """
+
+    def setUp(self):
+        # Most direct SQLiteRepo insert humanly possible
+        self.testdb = DB(SQLiteRepo())
+        sc_insert = "INSERT INTO {} VALUES(?,?)".format(SQLiteRepo.table_a)
+        reltxt = self.testdb.repo.reltxt
+        cs = self.testdb.repo._db_conn.cursor()
+        inp = (
+            ('a', None),
+            ('j', None),
+            ('t', 0.0001),
+            ('z', -274),
+            (reltxt('j', 'a', 'j'), None),
+            (reltxt('t', 'a', 't'), -274),
+            (reltxt('a', 'z', 'a'), 37)
+        )
+        cs.executemany(sc_insert, inp)
+
+    def test_export_all_interchange(self):
+        out = list(self.testdb.export())
+        expected = [
+            ('a', None),
+            ('j', None),
+            ('t', 0.0001),
+            ('z', -274),
+            ('j', 'a', 'j', None),
+            ('t', 'a', 't', -274),
+            ('a', 'z', 'a', 37)
+        ]
+        self.assertEqual(out, expected)
+
+    def test_export_anchor_interchange(self):
+        """Export just one anchor and its relations to the
+        interchange format
+
+        """
+        out = list(self.testdb.export(a='a'))
+        expected = [
+            ('a', None),
+            ('j', 'a', 'j', None),
+            ('t', 'a', 't', -274),
+            ('a', 'z', 'a', 37)
+        ]
+        self.assertEqual(out, expected)
+
+class SlrDbImportTests(TestCase):
+    """
+    Verify the operation of SQLiteRepo's import function.
+
+    This test relies on the correctness of SQLiteRepo.reltxt().
+    Tests for reltxt() must pass for these tests to be valid.
+
+    Unfortunately, tests for import_data() cannot be run under the
+    generic DB class test suite as import_data() implementations
+    are repository class-specific.
+
+    """
+    def test_import(self):
+        testdb = DB(SQLiteRepo())
+        sc_dump = "SELECT * FROM {}".format(SQLiteRepo.table_a)
+        cs = testdb.repo._db_conn.cursor()
+        inp = (
+            ('a',),
+            ('j', None),
+            ('t', 0.0001),
+            ('z', -274),
+            ('j', 'a', 'j', None),
+            ('t', 'a', 't', -274)
+        )
+        reltxt = testdb.repo.reltxt
+        expected = (
+            ('a', None),
+            ('j', None),
+            ('t', 0.0001),
+            ('z', -274),
+            (reltxt('j', 'a', 'j'), None),
+            (reltxt('t', 'a', 't'), -274)
+        )
+        testdb.import_data(inp)
+        sample = tuple(cs.execute(sc_dump))
+        self.assertEqual(sample, expected)
+
+    def test_import_unsupported_format(self):
+        """import_data(): reject unsupported formats"""
+
+        testdb = DB(SQLiteRepo())
+        sc_dump = "SELECT * FROM {}".format(SQLiteRepo.table_a)
+        cs = testdb.repo._db_conn.cursor()
+        inp = (
+            ('a', 0.1, 0.5, 0.75, 1.1),
+            {},
+        )
+        out = testdb.import_data(inp)
+        final = tuple(cs.execute(sc_dump))
+        self.assertEqual(final, ())
+
 class SlrDbGetTests(DBGetTests):
     """
     Run the Database Get Tests with a SQLiteRepository.
@@ -112,9 +220,6 @@ class SlrDbGetTests(DBGetTests):
 
     """
     RepoClass = SQLiteRepo
-
-    def direct_insert(self, db, a):
-        direct_insert(db.repo, a) # PROTIP: module-level direct_insert()
 
 class SlrDbWriteTests(DBWriteTests):
     """
@@ -125,11 +230,6 @@ class SlrDbWriteTests(DBWriteTests):
 
     """
     RepoClass = SQLiteRepo
-    def direct_insert(self, db, a):
-        direct_insert(db.repo, a)
-
-    def dump(self, db):
-        return direct_select_all(db.repo)
 
 class SLR_ReltextTests(TestCase):
     """Tests for reltext()"""

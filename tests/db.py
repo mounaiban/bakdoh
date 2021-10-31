@@ -206,7 +206,7 @@ class DBTests(TestCase):
                 )
             for c in args_outs:
                 testdb = DB(self.RepoClass())
-                self.direct_insert(testdb, td['init'])
+                testdb.import_data(td['init'])
                 args = c['args']
                 ex = None
                 m = testdb.__getattribute__(td['method'])
@@ -235,7 +235,9 @@ class DBTests(TestCase):
                     if 'final' in c:
                         # PROTIP: check if the final state of the mock
                         # database is the same as defined by 'final'
-                        self.assertEqual(self.dump(testdb), c['final'])
+                        self.assertEqual(
+                            list(testdb.export()), c['final']
+                        )
 
 class DBGetTests(DBTests):
     """

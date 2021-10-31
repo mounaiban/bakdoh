@@ -17,7 +17,9 @@ Bakdoh Totally Approachable Graph System (TAGS) Module
 # limitations under the License.
 
 import sqlite3
+from json import JSONEncoder
 from html import unescape
+from itertools import chain
 
 # Reserved symbols that cannot be used in anchors
 CHAR_REL = "\u21e8"     # Arrow Right
@@ -225,14 +227,44 @@ class DB:
         """
         self.repo.delete_rels(**kwargs)
 
+    def export(self, a='*', relname='*', **kwargs):
+        """
+        Return an iterator containing anchors by content or wildcard,
+        and associated relations in the interchange format.
+
+        See import_data() for a brief description of the format.
+
+        Set the "out_format" argument to 'json' to write a JSON
+        string ready to be exported to a file or any other stream.
+
+        """
+        # TODO: enable selective export by q-values
+        fmt = kwargs.get('out_format', 'interchange')
+        fmt_i = 'interchange'
+        anchs = self.get_a(a, out_format=fmt_i)
+        rels_a = self.get_rels(name=relname, a_from=a, out_format=fmt_i)
+        rels_b = ()
+        if a != '*':
+            rels_b = self.get_rels(name=relname, a_to=a, out_format=fmt_i)
+        if fmt == 'json':
+            temp = {
+                'a': list(anchs),
+                'rels': list(chain(rels_a, rels_b))
+            }
+            je = JSONEncoder()
+            return je.encode(temp)
+        elif fmt == 'interchange':
+            return chain(anchs, rels_a, rels_b)
+        else:
+            raise ValueError('output format "{}" unsupported'.format(fmt))
+
     def get_a(self, a, **kwargs):
         """
-        Return an iterator containing anchors by content or
-        wildcard.
+        Return an iterator containing anchors by content or wildcard.
 
         Arguments
         =========
-        * name : return only relations matching 'name'
+        * a: anchor content or wildcard
 
         * out_format: sets the output format; accepted values are
           the integers 1, 3, 7 or the string "interchange":
@@ -385,6 +417,53 @@ class DB:
             )
             for n, f, t, q in self.repo.get_rels(**kwargs)
         )
+
+    def import_data(self, data):
+        """
+        Imports anchors and relations into the database from a
+        tuple or list-based specification in the interchange format
+        as follows:
+
+        * (anchor_content, anchor_q) for Anchors
+
+        * (rel_name, anchor_from, anchor_to, rel_q) for Relations
+          Both anchor_from and anchor_to must exist in the database
+          at time of insertion.
+
+        All inputs must be wrapped in a single list or tuple, specified
+        as the "data" argument.
+
+        Example: (('a1', 0), ('a2', 9001), ('r', 'a1', 'a2', None))
+
+        The examples above are shown as tuples, but lists may be
+        used instead.
+
+        Returns a report of unsuccessful imports as a dict. The report
+        is under the "not_imported" key, which contains a list of
+        2-tuples like: (input, error).
+
+        This method is so-called because "import" is a reserved keyword.
+
+        """
+        report = {
+            'not_imported': [],
+        }
+        for d in data:
+            err_un = TypeError('unsupported format')
+            try:
+                if type(d) not in (tuple, list):
+                    report['not_imported'].append((d, err_un))
+                elif len(d) == 1:
+                    self.put_a(d[0], None)
+                elif len(d) == 2:
+                    self.put_a(d[0], d[1])
+                elif len(d) == 4:
+                    self.put_rel(d[0], d[1], d[2], d[3])
+                else:
+                    report['not_imported'].append((d, err_un))
+            except Exception as ex:
+                report['not_imported'].append((d, ex))
+        return report
 
     def incr_a_q(self, a, d, **kwargs):
         """
@@ -1059,6 +1138,10 @@ class SQLiteRepo:
         documentation of that method for usage.
 
         """
+        # TODO: SQLiteRepo may not handle case sensitivity correctly
+        # with relations, due to the way the LIKE statement works.
+        # Need to investigate that.
+
         nameargs = ('name', 'a_from', 'a_to')
         for n in nameargs:
             if n not in kwargs:
