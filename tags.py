@@ -100,6 +100,18 @@ class DB:
     # (such as SQLiteRepo) to start using databases.
     #
     # This class also serves as a reference interface for repositories
+    #
+    # TODO: DB case sensitivity is still not finalised at this stage;
+    # for now:
+    #
+    # * get_a() is case-sensitive only when no wildcards are used
+    #
+    # * get_rels() is case-sensitive only when source and destination
+    #   anchors are specified, along with the relation name, all without
+    #   wildcards.
+    #
+    # * both methods are case-insensitive under all other circumstances
+    #
 
     num_args = ('q', 'q_eq', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
     default_out_format = 0x7
@@ -392,13 +404,14 @@ class DB:
           with names starting with 'mashup'
 
         """
+
         fmt = kwargs.get('out_format', self.default_out_format)
         if fmt == 'interchange': fmt=0x1
         return (
             (
                 n,
-                next(self.get_a(f, out_format=fmt)),
-                next(self.get_a(t, out_format=fmt)),
+                next(self.get_a(f, out_format=fmt, wildcards=False)),
+                next(self.get_a(t, out_format=fmt, wildcards=False)),
                 q
             )
             for n, f, t, q in self.repo.get_rels(**kwargs)
@@ -531,6 +544,7 @@ class SQLiteRepo:
     """
     CHAR_WC_ZP_SQL = "\u005f" # Question Mark
     CHAR_WC_1C_SQL = "\u0025" # Percent Sign
+    chars_wc_sql = (CHAR_WC_ZP_SQL, CHAR_WC_1C_SQL)
     CHARS_DB_DEFAULT = {
         'CHAR_F_REL_SQL': "\u21e8", # relation marker (Arrow to the right)
         'CHAR_PX_AL_SQL': "\u0040", # alias marker (At-sign)
@@ -718,8 +732,11 @@ class SQLiteRepo:
 
     def _slr_set_q(self, ae, q, is_rel=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
+        suggest_wc = True in map(lambda x: x in ae, self.chars_wc_sql)
         sc_set = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
-        sc = "".join((sc_set, self._slr_a_where_clause(is_rel=is_rel)))
+        sc = "".join((sc_set, self._slr_a_where_clause(
+            is_rel=is_rel, wildcards=kwargs.get('wildcards', suggest_wc)
+        )))
         params = [q, ae]
         if kwargs:
             sc_q, qparams = self._slr_q_clause(**kwargs)
@@ -751,13 +768,15 @@ class SQLiteRepo:
         (q_lt or q_lte), q_not
 
         """
+        suggest_wc = True in map(lambda x: x in ae, self.chars_wc_sql)
         params = [ae,]
         sc_select = "SELECT {}, {} FROM {} ".format(
             self.col, self.col_q, self.table_a,
         )
         sc_where = self._slr_a_where_clause(
             is_rel=kwargs.get('is_rel', False),
-            is_alias=kwargs.get('is_alias', False)
+            is_alias=kwargs.get('is_alias', False),
+            wildcards=kwargs.get('wildcards', suggest_wc)
         )
         sc = "".join((sc_select, sc_where))
         if kwargs:
@@ -818,7 +837,7 @@ class SQLiteRepo:
         cs.execute(sc, (item, q))
         self._db_conn.commit()
 
-    def _slr_a_where_clause(self, is_rel=False, is_alias=False):
+    def _slr_a_where_clause(self, is_rel=False, is_alias=False, wildcards=True):
         """
         Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
         operations on anchors and relations.
@@ -829,20 +848,20 @@ class SQLiteRepo:
         ROWID
 
         """
+        # TODO: Should is_rel be called with_rels?
+
         out = "WHERE "
         if is_alias:
             out = "".join((out, "ROWID = ? "))
         else:
-            out = "".join(
-                (out, "{} LIKE ? ESCAPE '{}' ".format(self.col, self.escape))
-            )
+            if wildcards:
+                out = "".join((out, "{} LIKE ? ESCAPE '{}' ".format(
+                    self.col, self.escape)))
+            else:
+                out = "".join((out, "{} = ?".format(self.col)))
         if not is_rel:
-            out = "".join(
-                (out, "AND {} NOT LIKE '%{}%' ".format(
-                        self.col, self._char_rel
-                    )
-                )
-            )
+            out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
+                        self.col, self._char_rel)))
         return out
 
     def _slr_q_clause(self, **kwargs):

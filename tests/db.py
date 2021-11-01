@@ -500,6 +500,30 @@ class DBGetTests(DBTests):
         }
         self._run_tests(test_data)
 
+    def test_db_get_a_casesen(self):
+        test_data = {
+            'get_a_exact_casesen': {
+                'method': 'get_a',
+                'init': (
+                    ('azz', None),
+                    ('AzZ', 10),
+                    ('azZ', None),
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'get_a_exact_casesen',
+                        'args': {'a': 'azz'},
+                        'out': [('azz', None),]
+                    },
+                    {
+                        'subtest_name': 'get_a_exact_q_casesen',
+                        'args': {'a': 'AzZ', 'q': 10},
+                        'out': [('azz', None),]
+                    }
+                )
+            }
+        }
+
     def test_db_get_rels(self):
         test_data = {
             'get_rels_exact': {
@@ -669,6 +693,47 @@ class DBGetTests(DBTests):
                             ('aaaa', 'aaaa', 'zwwz', 1),
                             ('zwwz', 'zwwz', 'tqqz', 4)
                         ]
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
+
+    def test_db_get_rels_casesen(self):
+        """get_rels(): case sensitivity of exact name/content lookups"""
+        test_data = {
+            'get_rels_exact_cases': {
+                'method': 'get_rels',
+                'init': (
+                    ('azz', 0),
+                    ('Azz', 0),
+                    ('zaa', 10),
+                    ('Zaa', 10),
+                    ('raZ', 'azz', 'Zaa', 1),
+                    ('rAz', 'Azz', 'zaa', 2),
+                    ('rza', 'zaa', 'azz', 3),
+                    ('raz', 'azz', 'zaa', 4),
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'get_rels_exact_casesen_A',
+                        'args': {
+                            'name': 'raZ',
+                            'a_from': 'azz',
+                            'a_to': 'Zaa',
+                            'out_format': 'interchange'
+                        },
+                        'out': [('raZ', 'azz', 'Zaa', 1),]
+                    },
+                    {
+                        'subtest_name': 'get_rels_exact_casesen_B',
+                        'args': {
+                            'name': 'rAz',
+                            'a_from': 'Azz',
+                            'a_to': 'zaa',
+                            'out_format': 'interchange'
+                        },
+                        'out': [('rAz', 'Azz', 'zaa', 2),]
                     },
                 ),
             },
@@ -1030,6 +1095,25 @@ class DBWriteTests(DBTests):
                             ('r', 0),
                             ('v', 'vg', 'r', None)
                         ]
+                    },
+                )
+            }
+        }
+        self._run_tests(test_data)
+
+    def test_db_set_a_q_casesen(self):
+        test_data = {
+            'set_a_q_casesen': {
+                'method': 'set_a_q',
+                'init': (
+                    ('aaa', None),
+                    ('aAa', None)
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'set_a_exact_q_casesen',
+                        'args': {'s': 'aaa', 'q': 10, 'format': 'interchange'},
+                        'final': [('aaa', 10), ('aAa', None)]
                     },
                 )
             }
@@ -1472,6 +1556,53 @@ class DBWriteTests(DBTests):
             },
         }
         self._run_tests(test_data)
+
+    def test_set_rel_q_casesen(self):
+        test_data = {
+            'set_rel_q_casesen': {
+                'method': 'set_rel_q',
+                'init': (
+                    ('zZz', None),
+                    ('Zzz', None),
+                    ('rZz', 'zZz', 'Zzz', None),
+                    ('rzZ', 'Zzz', 'zZz', None),
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'set_rel_q_exact_casesen_A',
+                        'args': {
+                            'name': 'rZz',
+                            'a_from': 'zZz',
+                            'a_to': 'Zzz',
+                            'out_format': 'interchange',
+                            'q': 10
+                        },
+                        'final': (
+                            ('zZz', None),
+                            ('Zzz', None),
+                            ('rZz', 'zZz', 'Zzz', 10),
+                            ('rzZ', 'Zzz', 'zZz', None),
+                        )
+                    },
+                    {
+                        'subtest_name': 'set_rel_q_exact_casesen_B',
+                        'args': {
+                            'name': 'rzZ',
+                            'a_from': 'Zzz',
+                            'a_to': 'zZz',
+                            'out_format': 'interchange',
+                            'q': 10
+                        },
+                        'final': (
+                            ('zZz', None),
+                            ('Zzz', None),
+                            ('rZz', 'zZz', 'Zzz', None),
+                            ('rzZ', 'Zzz', 'zZz', 10),
+                        )
+                    }
+                )
+            }
+        }
 
     def test_self_test_run_tests(self):
         test_data = {
