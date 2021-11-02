@@ -417,6 +417,29 @@ class DB:
             for n, f, t, q in self.repo.get_rels(**kwargs)
         )
 
+    def get_special_chars(self):
+        """Returns a dict of characters that have some special meaning
+        to the database or repository. The characters are sorted by
+        types, addressable by the following keys:
+
+        * "E" (escape): characters used in escape sequences in wildcards,
+          names or content
+
+        * "F" (forbidden): delimiter characters that cannot be stored
+          anywhere in anchors or relation names
+
+        * "PX" (prefix): characters used for accessing special or virtual
+          anchors; these cannot be used as the first character of any
+          anchor or relation name, and must be escaped when querying
+
+        * "WC" (wildcard): characters used as wildcards, including
+          '*', '?' and all internal wildcards.
+
+        The dict is mainly used for unit testing.
+
+        """
+        return self.repo.special_chars
+
     def import_data(self, data):
         """
         Imports anchors and relations into the database from a
@@ -544,7 +567,6 @@ class SQLiteRepo:
     """
     CHAR_WC_ZP_SQL = "\u005f" # Question Mark
     CHAR_WC_1C_SQL = "\u0025" # Percent Sign
-    chars_wc_sql = (CHAR_WC_ZP_SQL, CHAR_WC_1C_SQL)
     CHARS_DB_DEFAULT = {
         'CHAR_F_REL_SQL': "\u21e8", # relation marker (Arrow to the right)
         'CHAR_PX_AL_SQL': "\u0040", # alias marker (At-sign)
@@ -552,6 +574,7 @@ class SQLiteRepo:
     }
     table_a = "a"
     table_config = "config"
+    chars_wc = ""
     col = "content"
     col_q = "q"
     col_config_key = "key"
@@ -564,6 +587,8 @@ class SQLiteRepo:
         CHAR_WC_1C_SQL: "{}{}".format(escape, CHAR_WC_1C_SQL),
         CHAR_WC_ZP_SQL: "{}{}".format(escape, CHAR_WC_ZP_SQL)
     }
+    for c in trans_wc.keys():
+        chars_wc = "".join((chars_wc, c))
 
     def __init__(self, db_path=None, mode="rwc", **kwargs):
         """
@@ -600,59 +625,79 @@ class SQLiteRepo:
             db_path = "test.sqlite3"
             mode = 'memory'
         uri = "file:{}?mode={}".format(db_path, mode)
+        self._char_al = None
         self._char_rel = None
         self._chars_px = ""
-        self._chars_f_escape = {}
         self._db_path = db_path
         self._db_conn = sqlite3.connect(uri, uri=True)
         self._db_cus = None
-        self._config = None
-        self._test_chars = {"PX": "", "F": "",}
-            # standard test char patterns:
-            # PX => special prefix chars, F => special characters
+        self.special_chars = {"E": self.escape, "F": "", "PX": "", "WC": ""}
+        self._trans_f = {}
+        self._trans_px = {}
         self.trans_wc = str.maketrans(self.trans_wc)
+        # Setup
         try:
             self._slr_ck_tables()
         except sqlite3.OperationalError as x:
             if 'no such table' in x.args[0]:
                 self._slr_create_tables()
                 self._slr_dict_to_config(self.CHARS_DB_DEFAULT)
-        self._config = self._slr_config_to_dict()
-        for k in self._config:
+        config_temp = self._slr_config_to_dict()
+        for k in config_temp:
             if k.startswith('CHAR_F'):
-                c = self._config[k]
-                self._chars_f_escape[ord(c)] = "&#{};".format(ord(c))
-                self._test_chars['F'] = c
+                c = config_temp[k]
+                self._trans_f[ord(c)] = "&#{};".format(ord(c))
+                self.special_chars['F'] = "".join((c, self.special_chars['F']))
             if k.startswith('CHAR_PX'):
-                self._chars_px = "".join((self._chars_px, self._config[k]))
-                self._test_chars['PX'] = self._config[k]
-            self._char_rel = self._config['CHAR_F_REL_SQL']
-            self._char_alias = self._config['CHAR_PX_AL_SQL']
+                c = config_temp[k]
+                self._chars_px = "".join((self._chars_px, c))
+                self.special_chars['PX'] = self._chars_px
+                self._trans_px[ord(c)] = "&#{};".format(ord(c))
+        self.special_chars["WC"] = self.chars_wc
+        self._char_rel = config_temp['CHAR_F_REL_SQL']
+        self._char_alias = config_temp['CHAR_PX_AL_SQL']
+
+    def _index_prefix(self, s, px_list):
+        """
+        Return the index of the end of the prefix in string 's', if
+        it begins with any prefix in the list 'px_list'.
+
+        The int '0' (zero) will be returned instead if no prefix is
+        found.
+
+        """
+        for p in px_list:
+            if s.startswith(p): return (len(p))
+        return 0
 
     def _prep_term(self, term):
         """
-        Return an str of a ready-to-use form of a search term.
-        TAGS wildcards are converted to SQL wildcards, HTML Entities
-        used as escape codes are decoded, local aliases are converted
-        to integer ROWIDs.
+        Reformat a string for use with lookups in the repository.
+        This includes escaping special characters as necessary,
+        converting TAGS wildcards to SQL wildcards, or diverting
+        to an alias lookup instead.
 
         """
-        if term.startswith(self._config['CHAR_PX_AL_SQL']):
-            return int(term[1:])
-        else: return unescape(term.translate(self.trans_wc))
+        if term.startswith(self._char_alias):
+            try:
+                return int(term[1:])
+            except ValueError as ex:
+                if 'invalid literal for int()' in ex.args[0]:
+                    raise ValueError('local alias must be decimal integer')
+        else:
+            i = self._index_prefix(term, self._trans_px.values())
+            out = term.translate(self.trans_wc)
+            out = "".join((out[:i], unescape(out[i:])))
+            return out.translate(self._trans_f)
 
     def _prep_a(self, a):
         """
-        Prepare an anchor for insertion into database, converting
-        reserved characters into escape codes as necessary
+        Prepare text for insertion into the DB, for use as anchor
+        content or relation names.
+
         """
-        out = ""
-        p = a[0]
-        if p in self._chars_px:
-            out = "".join((r"&#{};".format(ord(p)), a[1:]))
-        else:
-            out = a
-        return out.translate(self._chars_f_escape)
+        out = "".join((a[0].translate(self._trans_px), a[1:]))
+        return out.translate(self._trans_f)
 
     def _slr_ck_anchors_exist(self, **kwargs):
         """
@@ -732,7 +777,7 @@ class SQLiteRepo:
 
     def _slr_set_q(self, ae, q, is_rel=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
-        suggest_wc = True in map(lambda x: x in ae, self.chars_wc_sql)
+        suggest_wc = True in map(lambda x: x in ae, self.chars_wc)
         sc_set = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
         sc = "".join((sc_set, self._slr_a_where_clause(
             is_rel=is_rel, wildcards=kwargs.get('wildcards', suggest_wc)
@@ -768,7 +813,7 @@ class SQLiteRepo:
         (q_lt or q_lte), q_not
 
         """
-        suggest_wc = True in map(lambda x: x in ae, self.chars_wc_sql)
+        suggest_wc = True in map(lambda x: x in ae, self.chars_wc)
         params = [ae,]
         sc_select = "SELECT {}, {} FROM {} ".format(
             self.col, self.col_q, self.table_a,

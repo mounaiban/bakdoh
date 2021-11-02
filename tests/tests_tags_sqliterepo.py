@@ -21,7 +21,7 @@ from tests.db import DB, DBGetTests, DBWriteTests
 from unittest import TestCase
 
 valid_types_a = ([str, int], [str, float], [str, type(None)])
-valid_types_rel = ( 
+valid_types_rel = (
     [str, str, str, int],
     [str, str, str, float],
     [str, str, str, type(None)],
@@ -309,19 +309,48 @@ class SLRGetATests(TestCase):
         """Get multiple anchors containing TAGS wildcard characters
         using wildcards
 
+        TAGS wildcards are allowed to be stored in DB
+
         """
         testdb = DB(SQLiteRepo())
         chars = (CHAR_WC_ZP, CHAR_WC_1C)
+        fi = lambda x: "&#{};".format(ord(x))
         for c in chars:
             data = [("{}{}".format(c, n), None) for n in range(3)]
             testdb.import_data(data)
             with self.subTest(char=c):
-                samp = list(
-                    testdb.get_a("&#{};*".format(ord(c)),
-                        out_format='interchange'
-                    )
-                )
+                term = "{}*".format(fi(c))
+                samp = list(testdb.get_a(term, out_format='interchange'))
                 self.assertEqual(samp, data)
+
+    def test_get_a_special_chars_prefix(self):
+        """Get anchors containing escaped prefix special chars
+
+        Only the first char needs to be escaped
+
+        """
+        testdb = DB(SQLiteRepo())
+        px_chars = testdb.get_special_chars()["PX"]
+        fi = lambda x: "&#{};uuu{}u".format(ord(x), x) # format input
+        fo = lambda x: "{0}uuu{0}u".format(x)          # format output
+        data = [(fi(x), None) for x in px_chars]
+        testdb.import_data(data)
+        for c in px_chars:
+            samp = next(testdb.get_a(fi(c), out_format='interchange'))
+            expected = (fo(c), None)
+            self.assertEqual(samp, expected)
+
+    def test_get_a_special_chars_mixed(self):
+        """Put anchor containing all special and wildcard characters"""
+        testdb = DB(SQLiteRepo())
+        chardict = testdb.get_special_chars()
+        fi = lambda x, y: "".join(("#&{};".format(x), y))
+        suffix = "".join((chardict["E"], chardict["F"], chardict["WC"]))
+        data = [(fi(x, suffix), -10) for x in chardict["PX"]]
+        testdb.import_data(data)
+        for d in data:
+            samp = list(testdb.export())
+            self.assertEqual(samp, data)
 
 class SLRPutATests(TestCase):
     """Tests for put_a()"""
@@ -329,9 +358,9 @@ class SLRPutATests(TestCase):
     def test_put_a_special_chars(self):
         """Put anchor containing special reserved characters"""
         testdb = DB(SQLiteRepo())
-        data = [(x, None) for x in testdb.repo._test_chars["F"]]
-        e = lambda x: "&#{};".format(x)
-        expected = [(x, None) for x in testdb.repo._test_chars["F"]]
+        ei = lambda x: "&#{};".format(ord(x))
+        data = [(ei(x), None) for x in testdb.repo.special_chars["F"]]
+        expected = [(x, None) for x in testdb.repo.special_chars["F"]]
         for d in data:
             testdb.put_a(*d)
         samp = list(testdb.export())
@@ -346,10 +375,10 @@ class SLRPutATests(TestCase):
 
         """
         testdb = DB(SQLiteRepo())
-        ei = lambda x: "&#{}uuuuuuu;".format(x)
-        data = [(ei(x), None) for x in testdb.repo._test_chars["PX"]]
-        eo = lambda x: "&#{}uuuuuuu;".format(x)
-        expected = [(eo(x), None) for x in testdb.repo._test_chars["PX"]]
+        fi = lambda x: "&#{0};uuu&#{0};u".format(ord(x)) # format input
+        fo = lambda x: "{0}uuu{0}u".format(x)         # format output
+        data = [(fi(x), None) for x in testdb.repo.special_chars["PX"]]
+        expected = [(fo(x), None) for x in testdb.repo.special_chars["PX"]]
         for d in data:
             testdb.put_a(*d)
         samp = list(testdb.export())
@@ -365,6 +394,17 @@ class SLRPutATests(TestCase):
             SQLiteRepo.CHAR_WC_1C_SQL
         )
         data = [(x, -10) for x in chars]
+        for d in data:
+            testdb.put_a(*d)
+        samp = list(testdb.export())
+        self.assertEqual(samp, data)
+
+    def test_put_a_special_chars_mixed(self):
+        """Put anchor containing all special and wildcard characters"""
+        testdb = DB(SQLiteRepo())
+        chardict = testdb.get_special_chars()
+        suffix = "".join((chardict["E"], chardict["F"], chardict["WC"]))
+        data = [("".join((x, suffix)), -10) for x in chardict["PX"]]
         for d in data:
             testdb.put_a(*d)
         samp = list(testdb.export())
