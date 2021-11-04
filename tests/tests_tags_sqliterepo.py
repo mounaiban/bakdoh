@@ -425,9 +425,8 @@ class SLRGetATests(TestCase):
         """Put anchor containing all special and wildcard characters"""
         testdb = DB(SQLiteRepo())
         chardict = testdb.get_special_chars()
-        fi = lambda x, y: "".join(("#&{};".format(x), y))
         suffix = "".join((chardict["E"], chardict["F"], chardict["WC"]))
-        data = [(fi(x, suffix), -10) for x in chardict["PX"]]
+        data = [("".join((x, suffix)), -10) for x in chardict["PX"]]
         testdb.import_data(data)
         for d in data:
             samp = list(testdb.export())
@@ -489,7 +488,7 @@ class SLRPutATests(TestCase):
         testdb = DB(SQLiteRepo())
         chardict = testdb.get_special_chars()
         suffix = "".join((chardict["E"], chardict["F"], chardict["WC"]))
-        data = [("".join((x, suffix)), -10) for x in chardict["PX"]]
+        data = [("".join((p, suffix)), -10) for p in chardict["PX"]]
         for d in data:
             testdb.put_a(*d)
         samp = list(testdb.export())
