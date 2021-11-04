@@ -574,18 +574,18 @@ class SQLiteRepo:
     }
     table_a = "a"
     table_config = "config"
+    char_escape = '\\'
     chars_wc = ""
     col = "content"
     col_q = "q"
     col_config_key = "key"
     col_config_value = "v"
     limit = 32
-    escape = '\\'
     trans_wc = {
         CHAR_WC_1C: CHAR_WC_1C_SQL,
         CHAR_WC_ZP: CHAR_WC_ZP_SQL,
-        CHAR_WC_1C_SQL: "{}{}".format(escape, CHAR_WC_1C_SQL),
-        CHAR_WC_ZP_SQL: "{}{}".format(escape, CHAR_WC_ZP_SQL)
+        CHAR_WC_1C_SQL: "{}{}".format(char_escape, CHAR_WC_1C_SQL),
+        CHAR_WC_ZP_SQL: "{}{}".format(char_escape, CHAR_WC_ZP_SQL)
     }
     for c in trans_wc.keys():
         chars_wc = "".join((chars_wc, c))
@@ -631,7 +631,9 @@ class SQLiteRepo:
         self._db_path = db_path
         self._db_conn = sqlite3.connect(uri, uri=True)
         self._db_cus = None
-        self.special_chars = {"E": self.escape, "F": "", "PX": "", "WC": ""}
+        self.special_chars = {
+            "E": self.char_escape, "F": "", "PX": "", "WC": ""
+        }
         self._trans_f = {}
         self._trans_px = {}
         self.trans_wc = str.maketrans(self.trans_wc)
@@ -908,7 +910,7 @@ class SQLiteRepo:
         else:
             if wildcards:
                 out = "".join((out, "{} LIKE ? ESCAPE '{}' ".format(
-                    self.col, self.escape)))
+                    self.col, self.char_escape)))
             else:
                 out = "".join((out, "{} = ?".format(self.col)))
         if not with_rels:

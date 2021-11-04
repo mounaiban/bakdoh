@@ -280,7 +280,7 @@ class SlrPrepTermTests(TestCase):
 
     def setUp(self):
         self.testrepo = SQLiteRepo()
-        self.escape = self.testrepo.escape
+        self.escape = self.testrepo.char_escape
         self.alias = self.testrepo._char_alias
 
     def test_prep_term_alias(self):
