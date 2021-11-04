@@ -29,6 +29,10 @@ CHAR_WC_ZP = "\u003f" # zero or more chars: Question mark
 # based on the awareness that multiple forms of the symbols
 # are in use in different locales and languages.
 
+def escape(c):
+    """Convert a character to an escape sequence according to spec"""
+    return "&#{};".format(ord(c)) # currently: decimal-coded HTML entities
+
 def uesc_dict(d):
     """
     Return a translation dict which replaces nominated characters
@@ -40,7 +44,7 @@ def uesc_dict(d):
     """
     out = {}
     for v in d.values():
-        out[ord(v)] = r"&#{};".format(ord(v))
+        out[ord(v)] = escape(v)
     return out
 
 class Anchor:
@@ -648,13 +652,13 @@ class SQLiteRepo:
         for k in config_temp:
             if k.startswith('CHAR_F'):
                 c = config_temp[k]
-                self._trans_f[ord(c)] = "&#{};".format(ord(c))
+                self._trans_f[ord(c)] = escape(c)
                 self.special_chars['F'] = "".join((c, self.special_chars['F']))
             if k.startswith('CHAR_PX'):
                 c = config_temp[k]
                 self._chars_px = "".join((self._chars_px, c))
                 self.special_chars['PX'] = self._chars_px
-                self._trans_px[ord(c)] = "&#{};".format(ord(c))
+                self._trans_px[ord(c)] = escape(c)
         self.special_chars["WC"] = self.chars_wc
         self._char_rel = config_temp['CHAR_F_REL_SQL']
         self._char_alias = config_temp['CHAR_PX_AL_SQL']

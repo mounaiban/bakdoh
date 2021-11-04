@@ -16,7 +16,7 @@ Bakdoh TAGS Test Modules: SQLiteRepository
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tags import CHAR_WC_1C, CHAR_WC_ZP, SQLiteRepo
+from tags import escape, CHAR_WC_1C, CHAR_WC_ZP, SQLiteRepo
 from tests.db import DB, DBGetTests, DBWriteTests
 from unittest import TestCase
 
@@ -327,9 +327,7 @@ class SlrPrepATests(TestCase):
         )
         outs = (
                 "".join((
-                    self.chardict["E"],
-                    "&#{};".format(ord(x)),
-                    self.chardict["WC"]
+                    self.chardict["E"], escape(x), self.chardict["WC"]
                 )) for x in self.chardict["F"])
         for term, expected in zip(ins, outs):
             with self.subTest(term=term):
@@ -340,16 +338,11 @@ class SlrPrepATests(TestCase):
         """
         ins = (
             "".join((
-                x,
-                self.chardict["E"],
-                self.chardict["WC"]
+                x, self.chardict["E"], self.chardict["WC"]
             )) for x in self.chardict["PX"]
         )
         outs = (
-            "".join((
-                "&#{};".format(ord(x)),
-                self.chardict["E"],
-                self.chardict["WC"]
+                "".join((escape(x), self.chardict["E"], self.chardict["WC"]
             )) for x in self.chardict["PX"]
         )
         for term, expected in zip(ins, outs):
@@ -395,12 +388,11 @@ class SLRGetATests(TestCase):
         """
         testdb = DB(SQLiteRepo())
         chars = (CHAR_WC_ZP, CHAR_WC_1C)
-        fi = lambda x: "&#{};".format(ord(x))
         for c in chars:
             data = [("{}{}".format(c, n), None) for n in range(3)]
             testdb.import_data(data)
             with self.subTest(char=c):
-                term = "{}*".format(fi(c))
+                term = "{}*".format(escape(c))
                 samp = list(testdb.get_a(term, out_format='interchange'))
                 self.assertEqual(samp, data)
 
@@ -412,7 +404,7 @@ class SLRGetATests(TestCase):
         """
         testdb = DB(SQLiteRepo())
         px_chars = testdb.get_special_chars()["PX"]
-        fi = lambda x: "&#{};uuu{}u".format(ord(x), x) # format input
+        fi = lambda x: "{}uuu{}u".format(escape(x), x) # format input
         fo = lambda x: "{0}uuu{0}u".format(x)          # format output
         data = [(fi(x), None) for x in px_chars]
         testdb.import_data(data)
@@ -438,8 +430,7 @@ class SLRPutATests(TestCase):
     def test_put_a_special_chars(self):
         """Put anchor containing special reserved characters"""
         testdb = DB(SQLiteRepo())
-        ei = lambda x: "&#{};".format(ord(x))
-        data = [(ei(x), None) for x in testdb.repo.special_chars["F"]]
+        data = [(escape(x), None) for x in testdb.repo.special_chars["F"]]
         expected = [(x, None) for x in testdb.repo.special_chars["F"]]
         for d in data:
             testdb.put_a(*d)
@@ -455,7 +446,7 @@ class SLRPutATests(TestCase):
 
         """
         testdb = DB(SQLiteRepo())
-        fi = lambda x: "&#{0};uuu&#{0};u".format(ord(x)) # format input
+        fi = lambda x: "{0}uuu{0}u".format(escape(x)) # format input
         fo = lambda x: "{0}uuu{0}u".format(x)         # format output
         data = [(fi(x), None) for x in testdb.repo.special_chars["PX"]]
         expected = [(fo(x), None) for x in testdb.repo.special_chars["PX"]]
@@ -486,6 +477,7 @@ class SLRPutATests(TestCase):
 
         """
         testdb = DB(SQLiteRepo())
+        fi = lambda x, y: "".join((escape(x), y))
         chardict = testdb.get_special_chars()
         suffix = "".join((chardict["E"], chardict["F"], chardict["WC"]))
         data = [("".join((p, suffix)), -10) for p in chardict["PX"]]
