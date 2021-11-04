@@ -775,12 +775,12 @@ class SQLiteRepo:
         cs.execute(sc_table_a)
         cs.execute(sc_table_c)
 
-    def _slr_set_q(self, ae, q, is_rel=False, **kwargs):
+    def _slr_set_q(self, ae, q, with_rels=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
         suggest_wc = True in map(lambda x: x in ae, self.chars_wc)
         sc_set = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
         sc = "".join((sc_set, self._slr_a_where_clause(
-            is_rel=is_rel, wildcards=kwargs.get('wildcards', suggest_wc)
+            with_rels=with_rels, wildcards=kwargs.get('wildcards', suggest_wc)
         )))
         params = [q, ae]
         if kwargs:
@@ -791,9 +791,9 @@ class SQLiteRepo:
         cus.execute(sc, params)
         self._db_conn.commit()
 
-    def _slr_incr_q(self, ae, d, is_rel=False, **kwargs):
+    def _slr_incr_q(self, ae, d, with_rels=False, **kwargs):
         sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.table_a, self.col_q)
-        sc = "".join((sc_incr, self._slr_a_where_clause(is_rel=is_rel)))
+        sc = "".join((sc_incr, self._slr_a_where_clause(with_rels=with_rels)))
         params = [d, ae]
         if kwargs:
             sc_q, qparams = self._slr_q_clause(**kwargs)
@@ -809,7 +809,7 @@ class SQLiteRepo:
 
         Please see DB.get_rels() for usage
 
-        Supported kwargs: cursor, is_rel, q_eq, (q_gt or q_gte),
+        Supported kwargs: cursor, with_rels, q_eq, (q_gt or q_gte),
         (q_lt or q_lte), q_not
 
         """
@@ -819,7 +819,7 @@ class SQLiteRepo:
             self.col, self.col_q, self.table_a,
         )
         sc_where = self._slr_a_where_clause(
-            is_rel=kwargs.get('is_rel', False),
+            with_rels=kwargs.get('with_rels', False),
             is_alias=kwargs.get('is_alias', False),
             wildcards=kwargs.get('wildcards', suggest_wc)
         )
@@ -882,18 +882,25 @@ class SQLiteRepo:
         cs.execute(sc, (item, q))
         self._db_conn.commit()
 
-    def _slr_a_where_clause(self, is_rel=False, is_alias=False, wildcards=True):
+    def _slr_a_where_clause(
+            self, with_rels=False, is_alias=False, wildcards=True
+        ):
         """
         Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
         operations on anchors and relations.
 
-        When is_rel is True, the clause includes relations.
+        Arguments
+        =========
+        * with_rels: when True, the clause includes relations.
 
-        When is_alias is True, the clause selects anchors by SQLite
-        ROWID
+        * is_alias: when True, the clause selects anchors by SQLite
+          ROWID
+
+        * wildcards: when True, the clause interprets wildcard characters
+          as wildcards; when False, wildcard characters are interpreted
+          literally
 
         """
-        # TODO: Should is_rel be called with_rels?
 
         out = "WHERE "
         if is_alias:
@@ -904,7 +911,7 @@ class SQLiteRepo:
                     self.col, self.escape)))
             else:
                 out = "".join((out, "{} = ?".format(self.col)))
-        if not is_rel:
+        if not with_rels:
             out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
                         self.col, self._char_rel)))
         return out
@@ -1071,7 +1078,7 @@ class SQLiteRepo:
         """
         is_alias = a.startswith(self._char_rel)
         return self._slr_get_a(
-            self._prep_term(a), is_alias=is_alias, is_rel=False, **kwargs
+            self._prep_term(a), is_alias=is_alias, with_rels=False, **kwargs
         )
 
     def put_a(self, a, q=None):
@@ -1157,7 +1164,7 @@ class SQLiteRepo:
         ae_to = self._prep_term(a_to)
         namee = self._prep_term(name)
         term = self.reltxt(namee, ae_from, ae_to)
-        self._slr_set_q(term, q, is_rel=True, **kwargs)
+        self._slr_set_q(term, q, with_rels=True, **kwargs)
 
     def incr_rel_q(self, name, a_from, a_to, d, **kwargs):
         """Handle DB request to increment/decrement the numerical
@@ -1170,7 +1177,7 @@ class SQLiteRepo:
         ae_to = self._prep_term(a_to)
         namee = self._prep_term(name)
         term = self.reltxt(namee, ae_from, ae_to)
-        self._slr_incr_q(term, d, is_rel=True, **kwargs)
+        self._slr_incr_q(term, d, with_rels=True, **kwargs)
 
     def delete_rels(self, **kwargs):
         """Handle DB request to delete relations. Accepts the same arguments
@@ -1198,7 +1205,7 @@ class SQLiteRepo:
         else:
             namee = self._prep_term(name)
         sc_delete = "DELETE FROM {} ".format(self.table_a)
-        sc = "".join((sc_delete, self._slr_a_where_clause(is_rel=True)))
+        sc = "".join((sc_delete, self._slr_a_where_clause(with_rels=True)))
         cs = self._slr_get_shared_cursor()
         term = self.reltxt(namee, ae_from, ae_to)
         cs.execute(sc, (term,))
@@ -1220,7 +1227,7 @@ class SQLiteRepo:
         sc_relnames = """
                 SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
             """.format(self.col, self._char_rel, self.table_a)
-        sc_where = self._slr_a_where_clause(is_rel=True)
+        sc_where = self._slr_a_where_clause(with_rels=True)
         sc = "".join((sc_relnames, sc_where))
         term = self._prep_term(self.reltxt(
             s,
@@ -1247,6 +1254,6 @@ class SQLiteRepo:
             else:
                 kwargs[n] = self._prep_term(kwargs[n])
         term = self.reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
-        rels = self._slr_get_a(term, is_rel=True, **kwargs)
+        rels = self._slr_get_a(term, with_rels=True, **kwargs)
         return (r[0].split(self._char_rel)+[r[1],] for r in rels)
 
