@@ -275,6 +275,87 @@ class SLR_QClauseTests(TestCase):
                 expected = (y[0].format(testrep.col_q), y[1])
                 self.assertEqual(testrep._slr_q_clause(**x), expected)
 
+class SlrPrepTermTests(TestCase):
+    """Tests for _prep_term()"""
+
+    def setUp(self):
+        self.testrepo = SQLiteRepo()
+        self.escape = self.testrepo.escape
+        self.alias = self.testrepo._char_alias
+
+    def test_prep_term_alias(self):
+        """Detect ROWID alias"""
+        expected = 9001
+        term = "{}{}".format(self.alias, expected)
+        self.assertEqual(self.testrepo._prep_term(term), expected)
+
+    def test_prep_term_wildcards(self):
+        """Conversion of TAGS wildcards to SQL wildcards"""
+        args_outs = (
+            {'args': {'term': '*ananas'}, 'out': '%ananas'},
+            {'args': {'term': 'ana*nas'}, 'out': 'ana%nas'},
+            {'args': {'term': 'ananas*'}, 'out': 'ananas%'},
+            {'args': {'term': 'a??na'}, 'out': 'a__na'},
+            {
+                'args': {'term': '100%an_a'},
+                'out': '100{0}%an{0}_a'.format(self.escape)
+            },
+            {
+                'args': {'term': '100%an_a'},
+                'out': '100{0}%an{0}_a'.format(self.escape)
+            },
+        )
+        for a in args_outs:
+            with self.subTest(term=a['args']):
+                self.assertEqual(
+                    self.testrepo._prep_term(**a['args']), a['out']
+                )
+
+class SlrPrepATests(TestCase):
+    """Tests for _prep_a()"""
+
+    def setUp(self):
+        self.testrepo = SQLiteRepo()
+        self.chardict = self.testrepo.special_chars
+
+    def test_prep_a_special_chars_forbidden(self):
+        """Handle forbidden characters in relation names or anchor content.
+        """
+        ins = (
+            "".join((self.chardict["E"], x, self.chardict["WC"]))
+            for x in self.chardict["F"]
+        )
+        outs = (
+                "".join((
+                    self.chardict["E"],
+                    "&#{};".format(ord(x)),
+                    self.chardict["WC"]
+                )) for x in self.chardict["F"])
+        for term, expected in zip(ins, outs):
+            with self.subTest(term=term):
+                self.assertEqual(self.testrepo._prep_a(term), expected)
+
+    def test_prep_a_special_characters_prefix(self):
+        """Handle prefix characters in relation names or anchor content.
+        """
+        ins = (
+            "".join((
+                x,
+                self.chardict["E"],
+                self.chardict["WC"]
+            )) for x in self.chardict["PX"]
+        )
+        outs = (
+            "".join((
+                "&#{};".format(ord(x)),
+                self.chardict["E"],
+                self.chardict["WC"]
+            )) for x in self.chardict["PX"]
+        )
+        for term, expected in zip(ins, outs):
+            with self.subTest(term=term):
+                self.assertEqual(self.testrepo._prep_a(term), expected)
+
 class SLRGetATests(TestCase):
     """Tests for get_a()"""
 
@@ -400,7 +481,11 @@ class SLRPutATests(TestCase):
         self.assertEqual(samp, data)
 
     def test_put_a_special_chars_mixed(self):
-        """Put anchor containing all special and wildcard characters"""
+        """Put anchor containing all special characters.
+
+        Characters must come out the same way they went in.
+
+        """
         testdb = DB(SQLiteRepo())
         chardict = testdb.get_special_chars()
         suffix = "".join((chardict["E"], chardict["F"], chardict["WC"]))
