@@ -847,13 +847,13 @@ class SQLiteRepo:
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, (term,))
 
-    def _slr_config_to_dict(self):
+    def _slr_config_to_dict(self, term='%'):
         """Reads database config table into dict"""
-        sc = "SELECT {},{} FROM {}".format(
+        sc = "SELECT {0},{1} FROM {2} WHERE {0} LIKE ?".format(
             self.col_config_key, self.col_config_value, self.table_config
         )
         cs = self._db_conn.cursor()
-        rows = cs.execute(sc)
+        rows = cs.execute(sc, (term,))
         out = {}
         for r in rows: out[r[0]] = r[1]
         return out
