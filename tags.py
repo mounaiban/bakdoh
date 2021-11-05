@@ -33,13 +33,11 @@ def escape(c):
     """Convert a character to an escape sequence according to spec"""
     return "&#{};".format(ord(c)) # currently: decimal-coded HTML entities
 
-def uesc_dict(d):
+def escape_dict(chars):
     """
-    Return a translation dict which replaces nominated characters
-    with HTML Entitites (ampersand-code-semicolon escape sequences).
-
-    Values of dict d represent nominated characters. Keys from d
-    no not affect output.
+    Create a translation dict from the string of characters "chars"
+    which replaces instances of said characters with HTML Entitites
+    (ampersand-code-semicolon escape sequences).
 
     """
     out = {}
@@ -50,12 +48,12 @@ def uesc_dict(d):
 class Anchor:
     # Anchor (graph node) class. Includes navigation methods.
     def __init__(self, content, q=None, **kwargs):
-        # kwargs accepted: db
+        # kwargs accepted: db, do_sync
         self.db = kwargs.get('db')
         self.content = content
         self.q = q
-        do_get_q = (self.db is not None) and (q is None)
-        if do_get_q: self.get_q()
+        do_sync = kwargs.get('do_sync', True)
+        if self.db and self.db.auto_get and do_sync: self.reload()
 
     def __eq__(self, other):
         """Anchor comparison: two Anchors are of equal value when
@@ -66,15 +64,47 @@ class Anchor:
         return (self.q == other.q) and (self.content == other.content)
 
     def __repr__(self):
-        return "Anchor({},q={})".format(self.content, self.q)
+        return "{}('{}',q={})".format(
+            self.__class__.__name__, self.content, self.q
+        )
 
-    def get_q(self):
+    def reload(self):
         """Refresh the q value of the anchor from the database
         and return the q value
 
         """
-        self.q = next(self.db.repo.get_a(self.content))[1]
-        return self.q
+        if self.db:
+            try:
+                it = self.db.get_a(
+                    self.content, out_format=0x3, wildcards=False
+                )
+                self.q = next(it)[1]
+                return self.q
+            except StopIteration:
+                # if Anchor is not found
+                pass
+
+    def get_q(self):
+        """Old name for reload()"""
+        self.reload()
+
+    def put_self(self):
+        """Writes the Anchor to the connected database, if present.
+
+        If the Anchor is not in the DB, create the anchor. Else,
+        update the q-value instead.
+
+        """
+        try:
+            detect = next(self.db.repo.get_a(self.content, wildcards=False))
+            if not detect:
+                self.db.put_a(self.content, self.q)
+            else:
+                if self.q is None: return
+                self.db.set_a_q(self.content, self.q, wildcards=False)
+        except StopIteration:
+            # Anchor not found in db
+            self.db.put_a(self.content, self.q)
 
     def rels_out(self, s):
         # get names of relations linked from this anchor matching a pattern
@@ -126,7 +156,20 @@ class DB:
         #
         # Please see the documentation for the repository class
         # for details on how to create or load databases
+        #
+        # * auto_put: when True, Anchors make requests to the
+        #   linked database to save changes made to the object.
+        #
+        # * auto_get: when True, new Anchors will automatically
+        #   fetch the q-value when a new Anchor object is created
+        #   with contents matching an existing Anchor in the DB.
+        #
         self.repo = repo
+        self.auto_put = kwargs.get('auto_put', False)
+        self.auto_get = kwargs.get('auto_get', True)
+
+    def __repr__(self):
+        return "{}(repo={})".format(self.__class__.__name__, self.repo)
 
     def _ck_args_isnum(self, ck_args=None, **kwargs):
         if ck_args is None: ck_args = self.num_args
@@ -320,7 +363,7 @@ class DB:
             return (rout[0], rout[1])
 
         def format_obj(rout):
-            return Anchor(rout[0], rout[1], db=self)
+            return Anchor(rout[0], rout[1], db=self, do_sync=False)
 
         def format_conly(rout):
             # content only
