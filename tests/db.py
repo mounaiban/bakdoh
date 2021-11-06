@@ -521,6 +521,28 @@ class DBGetTests(DBTests):
                         'out': [('azz', None),]
                     }
                 )
+            },
+            'get_a_exact_casesen_no_wc': {
+                'method': 'get_a',
+                'init': (
+                    ('azAZ', None),
+                    ('az*Z', 20),
+                    ('az?z', 10),
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'get_a_exact_q_casesen_no_wc_A',
+                        'args': {'a': 'az*Z', 'wildcards': False},
+                        'subtest_name': 'get_a_exact_casesen_no_wc',
+                        'out': [('az*Z', 20),]
+                    },
+                    {
+                        'subtest_name': 'get_a_exact_q_casesen_no_wc_B',
+                        'args': {'a': 'az?Z', 'wildcards': False},
+                        'subtest_name': 'get_a_exact_casesen_no_wc',
+                        'out': [('az?Z', 10),]
+                    },
+                )
             }
         }
 
@@ -1114,6 +1136,40 @@ class DBWriteTests(DBTests):
                         'subtest_name': 'set_a_exact_q_casesen',
                         'args': {'s': 'aaa', 'q': 10, 'format': 'interchange'},
                         'final': [('aaa', 10), ('aAa', None)]
+                    },
+                )
+            },
+            'set_a_q_casesen_no_wc': {
+                'method': 'set_a_q',
+                'init': (
+                    ('z??z', None),
+                    ('z??Z', None),
+                    ('zAZz', None),
+                    ('z*Zz', None),
+                    ('z*zZ', None),
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'set_a_exact_q_casesen_no_wc_A',
+                        'args': {'s': 'z??z', 'q': 3.14159, 'wildcards': False},
+                        'final': [
+                            ('z??z', 3.14159),
+                            ('z??Z', None),
+                            ('zAZz', None),
+                            ('z*Zz', None),
+                            ('z*zZ', None),
+                        ]
+                    },
+                    {
+                        'subtest_name': 'set_a_exact_q_casesen_no_wc_B',
+                        'args': {'s': 'z*Zz', 'q': 3.14159, 'wildcards': False},
+                        'final': [
+                            ('z??z', None),
+                            ('z??Z', None),
+                            ('zAZz', None),
+                            ('z*Zz', 3.14159),
+                            ('z*zZ', None),
+                        ]
                     },
                 )
             }

@@ -826,10 +826,9 @@ class SQLiteRepo:
 
     def _slr_set_q(self, ae, q, with_rels=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
-        suggest_wc = True in map(lambda x: x in ae, self.chars_wc)
         sc_set = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
         sc = "".join((sc_set, self._slr_a_where_clause(
-            with_rels=with_rels, wildcards=kwargs.get('wildcards', suggest_wc)
+            with_rels=with_rels, wildcards=kwargs.get('wildcards', True)
         )))
         params = [q, ae]
         if kwargs:
@@ -862,7 +861,6 @@ class SQLiteRepo:
         (q_lt or q_lte), q_not
 
         """
-        suggest_wc = True in map(lambda x: x in ae, self.chars_wc)
         params = [ae,]
         sc_select = "SELECT {}, {} FROM {} ".format(
             self.col, self.col_q, self.table_a,
@@ -870,7 +868,7 @@ class SQLiteRepo:
         sc_where = self._slr_a_where_clause(
             with_rels=kwargs.get('with_rels', False),
             is_alias=kwargs.get('is_alias', False),
-            wildcards=kwargs.get('wildcards', suggest_wc)
+            wildcards=kwargs.get('wildcards', True)
         )
         sc = "".join((sc_select, sc_where))
         if kwargs:
@@ -1125,9 +1123,21 @@ class SQLiteRepo:
           future releases.
 
         """
-        is_alias = a.startswith(self._char_rel)
+        wildcards = kwargs.get('wildcards')
+        if wildcards is None:
+            wildcards = True in map(lambda x: x in a, self.chars_wc)
+            kwargs['wildcards'] = wildcards
+        is_alias = False
+        term = None
+        if wildcards: term = self._prep_term(a)
+        else:
+            is_alias = a.startswith(self._char_rel)
+            term = self._prep_a(a)
         return self._slr_get_a(
-            self._prep_term(a), is_alias=is_alias, with_rels=False, **kwargs
+            term,
+            is_alias=is_alias,
+            with_rels=False,
+            **kwargs
         )
 
     def put_a(self, a, q=None):
@@ -1142,7 +1152,14 @@ class SQLiteRepo:
         anchor. Called from DB.set_a_q()
 
         """
-        self._slr_set_q(self._prep_term(a), q, **kwargs)
+        wildcards = kwargs.get('wildcards')
+        if wildcards is None:
+            wildcards = True in map(lambda x: x in a, self.chars_wc)
+            kwargs['wildcards'] = wildcards
+        term = None
+        if wildcards: term = self._prep_term(a)
+        else: term = self._prep_a(a)
+        self._slr_set_q(term, q, **kwargs)
 
     def incr_a_q(self, a, d, **kwargs):
         """Handle DB request to increment/decrement a numerical
@@ -1292,10 +1309,10 @@ class SQLiteRepo:
         documentation of that method for usage.
 
         """
-        # TODO: SQLiteRepo may not handle case sensitivity correctly
-        # with relations, due to the way the LIKE statement works.
-        # Need to investigate that.
-
+        # TODO: get_rels() still does not quite yet handle relations
+        # between anchors with special characters; a method of efficiently
+        # treating the relation name and either anchor separately is needed.
+        #
         nameargs = ('name', 'a_from', 'a_to')
         for n in nameargs:
             if n not in kwargs:
@@ -1303,6 +1320,10 @@ class SQLiteRepo:
             else:
                 kwargs[n] = self._prep_term(kwargs[n])
         term = self.reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
+        wildcards = kwargs.get('wildcards')
+        if wildcards is None:
+            wildcards = True in map(lambda x: x in term, self.chars_wc)
+            kwargs['wildcards'] = wildcards
         rels = self._slr_get_a(term, with_rels=True, **kwargs)
         return (r[0].split(self._char_rel)+[r[1],] for r in rels)
 
