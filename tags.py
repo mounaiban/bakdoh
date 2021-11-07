@@ -671,12 +671,12 @@ class SQLiteRepo:
         if db_path is None:
             db_path = "test.sqlite3"
             mode = 'memory'
-        uri = "file:{}?mode={}".format(db_path, mode)
+        self.uri = "file:{}?mode={}".format(db_path, mode)
         self._char_al = None
         self._char_rel = None
         self._chars_px = ""
         self._db_path = db_path
-        self._db_conn = sqlite3.connect(uri, uri=True)
+        self._db_conn = sqlite3.connect(self.uri, uri=True)
         self._db_cus = None
         self.special_chars = {
             "E": self.char_escape, "F": "", "PX": "", "WC": ""
@@ -705,6 +705,11 @@ class SQLiteRepo:
         self.special_chars["WC"] = self.chars_wc
         self._char_rel = config_temp['CHAR_F_REL_SQL']
         self._char_alias = config_temp['CHAR_PX_AL_SQL']
+
+    def __repr__(self):
+        return "{}({}, uri={})".format(
+            self.__class__.__name__, self._db_path, self.uri
+        )
 
     def _index_prefix(self, s, px_list):
         """
