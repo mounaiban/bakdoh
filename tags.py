@@ -962,7 +962,7 @@ class SQLiteRepo:
                 out = "".join((out, "{} LIKE ? ESCAPE '{}' ".format(
                     self.col, self.char_escape)))
             else:
-                out = "".join((out, "{} = ?".format(self.col)))
+                out = "".join((out, "{} = ? ".format(self.col)))
         if not with_rels:
             out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
                         self.col, self._char_rel)))
@@ -1009,7 +1009,7 @@ class SQLiteRepo:
 
         """
         andor = ""
-        clause = ""
+        clause = " "
         lbe = None  # lower bound or exact value
         lbe_expr = ""
         params = []

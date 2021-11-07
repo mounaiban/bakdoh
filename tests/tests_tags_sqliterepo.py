@@ -227,7 +227,7 @@ class SLR_QClauseTests(TestCase):
         """Generate SQL expression for q range in WHERE clause"""
         testrep = SQLiteRepo()
         argtests = (
-            ({}, ('',[])),
+            ({}, (' ',[])),
             ({'q_eq':5}, (' AND {} = ?', [5,])),
             ({'q_eq':0}, (' AND {} = ?', [0,])),
             ({'q_gt':1}, (' AND {} > ?', [1,])),
