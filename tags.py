@@ -732,17 +732,7 @@ class SQLiteRepo:
         to an alias lookup instead.
 
         """
-        if term.startswith(self._char_alias):
-            try:
-                return int(term[1:])
-            except ValueError as ex:
-                if 'invalid literal for int()' in ex.args[0]:
-                    raise ValueError('local alias must be decimal integer')
-        else:
-            i = self._index_prefix(term, self._trans_px.values())
-            out = term.translate(self.trans_wc)
-            out = "".join((out[:i], unescape(out[i:])))
-            return out.translate(self._trans_f)
+        return self._prep_a_nx(term, wildcards=True)
 
     def _prep_a(self, a):
         """
@@ -750,8 +740,36 @@ class SQLiteRepo:
         content or relation names.
 
         """
-        out = "".join((a[0].translate(self._trans_px), a[1:]))
-        return out.translate(self._trans_f)
+        return self._prep_a_nx(a, wildcards=False)
+
+    def _prep_a_nx(self, a, **kwargs):
+        """
+        Prepare text for insertion into the DB, or for lookup
+        (SQL SELECT) queries.
+
+        ROWID aliases (like '@9001') are converted into integers.
+
+        Arguments
+        =========
+        * wildcards : when True, converts TAGS wildcards to
+          SQL wildcards.
+
+        """
+        # NeXt-generation Version
+        if not kwargs.get('wildcards', True):
+            out = "".join((a[0].translate(self._trans_px), a[1:]))
+            return out.translate(self._trans_f)
+        else:
+            if a.startswith(self._char_alias):
+                alias = a[1:]
+                if alias.isdigit():
+                    return int(alias)
+                else: return a
+            else:
+                i = self._index_prefix(a, self._trans_px.values())
+                out = a.translate(self.trans_wc)
+                out = "".join((out[:i], unescape(out[i:])))
+                return out.translate(self._trans_f)
 
     def _slr_ck_anchors_exist(self, **kwargs):
         """
@@ -831,6 +849,8 @@ class SQLiteRepo:
 
     def _slr_set_q(self, ae, q, with_rels=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
+        if kwargs.get('wildcards') is None:
+            kwargs['wildcards'] = self._has_wildcards(ae)
         sc_set = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
         sc = "".join((sc_set, self._slr_a_where_clause(
             with_rels=with_rels, wildcards=kwargs.get('wildcards', True)
@@ -845,6 +865,8 @@ class SQLiteRepo:
         self._db_conn.commit()
 
     def _slr_incr_q(self, ae, d, with_rels=False, **kwargs):
+        if kwargs.get('wildcards') is None:
+            kwargs['wildcards'] = self._has_wildcards(ae)
         sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.table_a, self.col_q)
         sc = "".join((sc_incr, self._slr_a_where_clause(with_rels=with_rels)))
         params = [d, ae]
@@ -1053,15 +1075,34 @@ class SQLiteRepo:
         else:
             return (clause, params)
 
-    def reltxt(self, namee, a1e, a2e, alias=None, alias_fmt=3):
-        """
-        Return a string representing a relation with name namee from
-        anchor a1e to a2e. This function is also used for building
-        search terms containing wildcards.
+    def _has_wildcards(self, a):
+        return True in map(lambda x: x in a, self.chars_wc)
 
-        Note that special symbols are not escaped: malformed relations
-        are not suppressed. Please escape these symbols before using
-        this function.
+    def reltxt(self, namee, a1e, a2e, alias='local', alias_fmt=3):
+        return self.reltxt_nx(namee, a1e, a2e)
+
+    def reltxt_nx(self, name='*', a_from='*', a_to='*', **kwargs):
+        """
+        Return a string representing a relation from ``a_from`` to
+        ``a_to``, with name ``name``. This method is used for building
+        search terms (which may contain wildcards) for looking up
+        relations too.
+
+        """
+        # NeXt-generation Version
+        # supported kwargs: wildcards
+        return '{}{}{}{}{}'.format(
+            self._prep_a_nx(name, **kwargs),
+            self._char_rel,
+            self._prep_a_nx(a_from, **kwargs),
+            self._char_rel,
+            self._prep_a_nx(a_to, **kwargs),
+        )
+
+    def reltxt_alias_rowid(self, name, a_from, a_to, out_format=3):
+        """
+        Aliased relations are intended to be space-efficient versions of
+        relations between anchors with lengthy content
 
         Keyword Arguments
         =================
@@ -1080,37 +1121,26 @@ class SQLiteRepo:
                       3: use alias for both anchors
 
                       Results for undocumented values are
-                      undocumented.
-
-        Note
-        ====
-        Aliased relations are space-efficient, and are practically
-        required for longer anchors, but not searchable.
+                      undefined.
 
         """
-        # NOTE: The 'e' suffix in the argument names means that
-        # the argument is 'expected to be already escaped'
-        #
-        # TODO: remove support for aliased relations, and swap with
-        # verbose<==>aliased converter?
-        #
-        af = a1e
-        at = a2e
-        if alias == 'local':
-            try:
-                rid1 = next(self._slr_get_rowids(a1e))[0]
-                rid2 = next(self._slr_get_rowids(a2e))[0]
-            except StopIteration:
-                # TODO: need a clearer error message
-                raise ValueError('both anchors must have ROWIDs')
-            if rid1 and rid2:
-                if alias_fmt & 1:
-                    at = "{}{}".format(self._char_alias, rid2)
-                if alias_fmt & 2:
-                    af = "{}{}".format(self._char_alias, rid1)
-        return '{}{}{}{}{}'.format(
-            namee, self._char_rel, af, self._char_rel, at
-        )
+        n = self._prep_a_nx(name, wildcards=False)
+        af = self._prep_a_nx(a_from, wildcards=False)
+        at = self._prep_a_nx(a_to, wildcards=False)
+        try:
+            if out_format & 1:
+                at = "{}{}".format(
+                    self._char_alias, next(self._slr_get_rowids(at))[0]
+                )
+            if out_format & 2:
+                af = "{}{}".format(
+                    self._char_alias, next(self._slr_get_rowids(af))[0]
+                )
+            return '{}{}{}{}{}'.format(
+                n, self._char_rel, af, self._char_rel, at
+            )
+        except StopIteration:
+            raise ValueError('at least one anchor not found')
 
     def get_a(self, a, **kwargs):
         """Handle DB request to return an iterator of anchors.
@@ -1128,16 +1158,11 @@ class SQLiteRepo:
           future releases.
 
         """
-        wildcards = kwargs.get('wildcards')
-        if wildcards is None:
-            wildcards = True in map(lambda x: x in a, self.chars_wc)
-            kwargs['wildcards'] = wildcards
-        is_alias = False
-        term = None
-        if wildcards: term = self._prep_term(a)
-        else:
-            is_alias = a.startswith(self._char_rel)
-            term = self._prep_a(a)
+        wildcards = kwargs.get('wildcards', self._has_wildcards(a))
+        is_alias = a.startswith(self._char_alias)
+        if is_alias: term = self._prep_a_nx(a)
+        elif wildcards: term = self._prep_a_nx(a, wildcards=wildcards)
+        else: term = self._prep_a_nx(a, wildcards=False)
         return self._slr_get_a(
             term,
             is_alias=is_alias,
@@ -1150,20 +1175,14 @@ class SQLiteRepo:
         backing store
 
         """
-        self._slr_insert_into_a(self._prep_a(a), q)
+        self._slr_insert_into_a(self._prep_a_nx(a, wildcards=False), q)
 
     def set_a_q(self, a, q, **kwargs):
         """Handle DB request to assign a numerical quantity to an
         anchor. Called from DB.set_a_q()
 
         """
-        wildcards = kwargs.get('wildcards')
-        if wildcards is None:
-            wildcards = True in map(lambda x: x in a, self.chars_wc)
-            kwargs['wildcards'] = wildcards
-        term = None
-        if wildcards: term = self._prep_term(a)
-        else: term = self._prep_a(a)
+        term = self._prep_a_nx(a, **kwargs)
         self._slr_set_q(term, q, **kwargs)
 
     def incr_a_q(self, a, d, **kwargs):
@@ -1171,7 +1190,7 @@ class SQLiteRepo:
         quantity of an anchor. Called from DB.incr_a_q()
 
         """
-        self._slr_incr_q(self._prep_term(a), d, **kwargs)
+        self._slr_incr_q(self._prep_a_nx(a), d, **kwargs)
 
     def delete_a(self, a):
         """Handle DB request to delete anchors. Accepts the same arguments
@@ -1180,11 +1199,10 @@ class SQLiteRepo:
 
         """
         # TODO: Allow delete by quantity or quantity range?
-
         sc_delete = "DELETE FROM {} ".format(self.table_a)
         sc = "".join((sc_delete, self._slr_a_where_clause()))
         cs = self._slr_get_shared_cursor()
-        cs.execute(sc, (self._prep_term(a),))
+        cs.execute(sc, (self._prep_a_nx(a),))
         self._db_conn.commit()
 
     def put_rel(self, name, a1, a2, q=None, **kwargs):
@@ -1194,7 +1212,7 @@ class SQLiteRepo:
 
         SQLite Repository-Specific Features
         ===================================
-        * Arguments: alias, alias_fmt, prep_a
+        * Arguments: alias, alias_format, prep_a
 
         * The anchor preparation process may be bypassed by setting
           the 'prep_a' argument to False.
@@ -1204,20 +1222,16 @@ class SQLiteRepo:
             self._slr_ck_rel_self,
             self._slr_ck_anchors_exist,
         )
-        a1e = None
-        a2e = None
-        namee = None
-        if kwargs.get('prep_a', True):
-            a1e = self._prep_a(a1)
-            a2e = self._prep_a(a2)
-            namee = self._prep_a(name)
-        else:
-            a1e = a1
-            a2e = a2
-            namee = name
         for f in ck_fns:
-            f(namee=namee, a1e=a1e, a2e=a2e)
-        rtxt = self.reltxt(namee, a1e, a2e, alias=kwargs.get('alias'))
+            f(namee=name, a1e=a1, a2e=a2)
+        if kwargs.get('alias_format', 0x0):
+            rtxt = self.reltxt_alias_rowid(
+                name,
+                a1,
+                a2,
+                out_format=kwargs.get('alias_format')
+            )
+        else: rtxt = self.reltxt_nx(name, a1, a2, wildcards=False)
         try:
             self._slr_insert_into_a(rtxt, q)
         except sqlite3.IntegrityError as x:
@@ -1231,11 +1245,13 @@ class SQLiteRepo:
         for that method for usage.
 
         """
-        ae_from = self._prep_term(a_from)
-        ae_to = self._prep_term(a_to)
-        namee = self._prep_term(name)
-        term = self.reltxt(namee, ae_from, ae_to)
-        self._slr_set_q(term, q, with_rels=True, **kwargs)
+        term = self.reltxt_nx(name, a_from, a_to, **kwargs)
+        self._slr_set_q(
+            term,
+            q,
+            with_rels=True,
+            **kwargs
+        )
 
     def incr_rel_q(self, name, a_from, a_to, d, **kwargs):
         """Handle DB request to increment/decrement the numerical
@@ -1244,11 +1260,13 @@ class SQLiteRepo:
         documentation for that method for usage.
 
         """
-        ae_from = self._prep_term(a_from)
-        ae_to = self._prep_term(a_to)
-        namee = self._prep_term(name)
-        term = self.reltxt(namee, ae_from, ae_to)
-        self._slr_incr_q(term, d, with_rels=True, **kwargs)
+        term = self.reltxt_nx(name, a_from, a_to, **kwargs)
+        self._slr_incr_q(
+            term,
+            d,
+            with_rels=True,
+            **kwargs
+        )
 
     def delete_rels(self, **kwargs):
         """Handle DB request to delete relations. Accepts the same arguments
@@ -1257,28 +1275,17 @@ class SQLiteRepo:
 
         """
         # TODO: Allow delete by quantity or quantity range?
-
-        a_to = kwargs.get('a_to')
-        a_from = kwargs.get('a_from')
-        if a_to is None and a_from is None:
+        a_from = kwargs.get('a_from', CHAR_WC_ZP)
+        a_to = kwargs.get('a_to', CHAR_WC_ZP)
+        if a_to == CHAR_WC_ZP and a_from == CHAR_WC_ZP:
             raise ValueError("at least one of a_to or a_from is required")
-        if a_from is None:
-            ae_from = '%'
-        else:
-            ae_from = self._prep_term(a_from)
-        if a_to is None:
-            ae_to = '%'
-        else:
-            ae_to = self._prep_term(a_to)
-        name = kwargs.get('name')
-        if name is None:
-            namee = '%'
-        else:
-            namee = self._prep_term(name)
+        term = self.reltxt_nx(kwargs.get('name', '*'), a_from, a_to)
         sc_delete = "DELETE FROM {} ".format(self.table_a)
-        sc = "".join((sc_delete, self._slr_a_where_clause(with_rels=True)))
+        sc_where = self._slr_a_where_clause(
+            with_rels=True, wildcards=self._has_wildcards(term)
+        )
+        sc = "".join((sc_delete, sc_where))
         cs = self._slr_get_shared_cursor()
-        term = self.reltxt(namee, ae_from, ae_to)
         cs.execute(sc, (term,))
         self._db_conn.commit()
 
@@ -1296,15 +1303,13 @@ class SQLiteRepo:
 
         """
         sc_relnames = """
-                SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
+            SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
             """.format(self.col, self._char_rel, self.table_a)
         sc_where = self._slr_a_where_clause(with_rels=True)
         sc = "".join((sc_relnames, sc_where))
-        term = self._prep_term(self.reltxt(
-            s,
-            kwargs.get('a_from', CHAR_WC_ZP),
-            kwargs.get('a_to', CHAR_WC_ZP)
-        ))
+        term = self.reltxt_nx(
+            s, kwargs.get('a_from', CHAR_WC_ZP), kwargs.get('a_to', CHAR_WC_ZP)
+        )
         cs = kwargs.get('cursor', self._slr_get_shared_cursor())
         return cs.execute(sc, (term,))
 
@@ -1314,21 +1319,13 @@ class SQLiteRepo:
         documentation of that method for usage.
 
         """
-        # TODO: get_rels() still does not quite yet handle relations
-        # between anchors with special characters; a method of efficiently
-        # treating the relation name and either anchor separately is needed.
-        #
-        nameargs = ('name', 'a_from', 'a_to')
-        for n in nameargs:
-            if n not in kwargs:
-                kwargs[n] = '%'
-            else:
-                kwargs[n] = self._prep_term(kwargs[n])
-        term = self.reltxt(kwargs['name'], kwargs['a_from'], kwargs['a_to'])
-        wildcards = kwargs.get('wildcards')
-        if wildcards is None:
-            wildcards = True in map(lambda x: x in term, self.chars_wc)
-            kwargs['wildcards'] = wildcards
-        rels = self._slr_get_a(term, with_rels=True, **kwargs)
+        term = self.reltxt_nx(
+            kwargs.get('name', '*'),
+            kwargs.get('a_from', '*'),
+            kwargs.get('a_to', '*')
+        )
+        rels = self._slr_get_a(
+            term, with_rels=True, wildcards=self._has_wildcards(term), **kwargs
+        )
         return (r[0].split(self._char_rel)+[r[1],] for r in rels)
 

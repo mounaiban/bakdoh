@@ -155,14 +155,6 @@ class SlrDbWriteTests(DBWriteTests):
 class SLR_ReltextTests(TestCase):
     """Tests for reltext()"""
 
-    def test_reltext_not_exist(self):
-        testrep = SQLiteRepo()
-        testdb = DB(testrep)
-        data = [('a', None), ('z', None)]
-        testdb.import_data(data)
-        with self.assertRaises(ValueError):
-            testdb.repo.reltxt(namee='Rnull', a1e='x', a2e='y', alias='local')
-
     def test_reltext(self):
         testrep = SQLiteRepo()
         testdb = DB(testrep)
@@ -181,33 +173,46 @@ class SLR_ReltextTests(TestCase):
                 },
                 'Raz{0}a{0}z'.format(char_rel)
             ),
+        ) # format: (kwargs, expected_output)
+        # NOTE: this test makes an assumption that ROWIDs are always
+        # and strictly in order of insertion of the anchors
+        #
+        for a in argtests:
+            with self.subTest(a=a):
+                self.assertEqual(testrep.reltxt(**a[0]), a[1])
+
+    def test_reltxt_alias(self):
+        testrep = SQLiteRepo()
+        testdb = DB(testrep)
+        data = [('a', None), ('z', None)]
+        testdb.import_data(data)
+        char_rel = testrep._char_rel
+        char_alias = testrep._char_alias
+        argtests = (
             (
                 {
-                    'namee': 'Raz',
-                    'a1e': 'a',
-                    'a2e': 'z',
-                    'alias': 'local',
-                    'alias_fmt': 1
+                    'name': 'Raz',
+                    'a_from': 'a',
+                    'a_to': 'z',
+                    'out_format': 1
                 },
                 'Raz{0}a{0}{1}2'.format(char_rel, char_alias)
             ),
             (
                 {
-                    'namee': 'Raz',
-                    'a1e': 'a',
-                    'a2e': 'z',
-                    'alias': 'local',
-                    'alias_fmt': 2
+                    'name': 'Raz',
+                    'a_from': 'a',
+                    'a_to': 'z',
+                    'out_format': 2
                 },
                 'Raz{0}{1}1{0}z'.format(char_rel, char_alias)
             ),
             (
                 {
-                    'namee': 'Raz',
-                    'a1e': 'a',
-                    'a2e': 'z',
-                    'alias': 'local',
-                    'alias_fmt': 3
+                    'name': 'Raz',
+                    'a_from': 'a',
+                    'a_to': 'z',
+                    'out_format': 3
                 },
                 'Raz{0}{1}1{0}{1}2'.format(char_rel, char_alias)
             ),
@@ -218,7 +223,15 @@ class SLR_ReltextTests(TestCase):
         #
         for a in argtests:
             with self.subTest(a=a):
-                self.assertEqual(testrep.reltxt(**a[0]), a[1])
+                self.assertEqual(testrep.reltxt_alias_rowid(**a[0]), a[1])
+
+    def test_reltext_alias_not_exist(self):
+        testrep = SQLiteRepo()
+        testdb = DB(testrep)
+        data = [('a', None), ('z', None)]
+        testdb.import_data(data)
+        with self.assertRaises(ValueError):
+            testdb.repo.reltxt_alias_rowid(name='Rnull', a_from='x', a_to='y')
 
 class SLR_QClauseTests(TestCase):
     """Tests for _slr_q_clause()"""
@@ -284,10 +297,10 @@ class SlrPrepTermTests(TestCase):
         self.alias = self.testrepo._char_alias
 
     def test_prep_term_alias(self):
-        """Detect ROWID alias"""
-        expected = 9001
-        term = "{}{}".format(self.alias, expected)
-        self.assertEqual(self.testrepo._prep_term(term), expected)
+        """Handle ROWID aliases"""
+        val = 9001
+        term = "{}{}".format(self.alias, val)
+        self.assertEqual(self.testrepo._prep_term(term), val)
 
     def test_prep_term_wildcards(self):
         """Conversion of TAGS wildcards to SQL wildcards"""
@@ -351,6 +364,17 @@ class SlrPrepATests(TestCase):
 
 class SLRGetATests(TestCase):
     """Tests for get_a()"""
+
+    def test_get_a_alias(self):
+        testdb = DB(SQLiteRepo())
+        data = (
+            ('a', 10),
+            ('b', 11),
+        )
+        testdb.import_data(data)
+        expected = ('a', 10) # assuming ROWID strictly follows insertion order
+        samp = next(testdb.get_a('@1', out_format='interchange'))
+        self.assertEqual(samp, expected)
 
     def test_get_a_exact_sql_wildcard_escape(self):
         """Get single anchor containing SQL wildcard characters"""
@@ -485,4 +509,111 @@ class SLRPutATests(TestCase):
             testdb.put_a(*d)
         samp = list(testdb.export())
         self.assertEqual(samp, data)
+
+class SLRPutRelsTests(TestCase):
+    """Tests for put_rels()"""
+
+    def test_put_rel_special_chars_wc(self):
+        """Put relations containing wildcard characters"""
+        testdb = DB(SQLiteRepo())
+        init = (
+            ('a***', 10),
+            ('b???', 20),
+        )
+        testdb.import_data(init)
+        testdb.put_rel('R?*', 'a***', 'b???', None)
+        final = [
+            ('a***', 10),
+            ('b???', 20),
+            ('R?*', 'a***', 'b???', None)
+        ]
+        samp = list(testdb.export())
+        self.assertEqual(samp, final)
+
+class SLRGetRelsTests(TestCase):
+    """Tests for get_rels()"""
+
+    def test_get_rel_special_chars_wc(self):
+        """Get relations containing wildcard characters"""
+        testdb = DB(SQLiteRepo())
+        init = (
+            ('a***', 10),
+            ('b???', 20),
+            ('R?*', 'a***', 'b???', None)
+        )
+        testdb.import_data(init)
+        expected = ('R?*', 'a***', 'b???', None)
+        samp = next(testdb.get_rels(a_from='a&#42;*', out_format='interchange'))
+        self.assertEqual(samp, expected)
+
+class SLRSetQTests(TestCase):
+    """Tests for setting q-values"""
+
+    def test_set_a_q_special_chars_wc(self):
+        testdb = DB(SQLiteRepo())
+        init = (
+            ('a***', 10),
+            ('b???', 20),
+        )
+        testdb.import_data(init)
+        expected = [
+            ('a***', 10),
+            ('b???', 888),
+        ]
+        testdb.set_a_q('b???', 888, wildcards=False)
+        samp = list(testdb.export())
+        self.assertEqual(samp, expected)
+
+    def test_set_rel_q_special_chars_wc(self):
+        testdb = DB(SQLiteRepo())
+        init = (
+            ('a***', 10),
+            ('b???', 20),
+            ('R?*', 'a***', 'b???', None)
+        )
+        testdb.import_data(init)
+        expected = [
+            ('a***', 10),
+            ('b???', 20),
+            ('R?*', 'a***', 'b???', 888)
+        ]
+        testdb.set_rel_q('R?*', 'a***', 'b???', 888, wildcards=False)
+        samp = list(testdb.export())
+        self.assertEqual(samp, expected)
+
+
+class SLRIncrQTests(TestCase):
+    """Tests for setting q-values"""
+
+    def test_incr_a_q_special_chars_wc(self):
+        testdb = DB(SQLiteRepo())
+        init = (
+            ('a***', 10),
+            ('b???', 20),
+        )
+        testdb.import_data(init)
+        expected = [
+            ('a***', 15),
+            ('b???', 20),
+        ]
+        testdb.incr_a_q('a***', 5, wildcards=False)
+        samp = list(testdb.export())
+        self.assertEqual(samp, expected)
+
+    def test_incr_rel_q_special_chars_wc(self):
+        testdb = DB(SQLiteRepo())
+        init = (
+            ('a***', 10),
+            ('b???', 20),
+            ('R?*x', 'a***', 'b???', 80)
+        )
+        testdb.import_data(init)
+        expected = [
+            ('a***', 10),
+            ('b???', 20),
+            ('R?*x', 'a***', 'b???', 79)
+        ]
+        testdb.incr_rel_q('R?*x', 'a***', 'b???', -1, wildcards=False)
+        samp = list(testdb.export())
+        self.assertEqual(samp, expected)
 
