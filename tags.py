@@ -88,6 +88,24 @@ class Anchor:
         """Old name for reload()"""
         self.reload()
 
+    def link(self, name, a_to, q):
+        # Create a relation from this anchor.
+        # To prevent accidental placement, auto_put must be
+        # set to True on the Anchor's connected DB
+        if type(self.db) is DB:
+            if not self.db.auto_put:
+                raise RuntimeError('auto_put not enabled in DB')
+            self.db.put_rel(name, self.content, a_to, q)
+
+    def unlink(self, name, a_to):
+        # Remove relations from this anchor. Wildcards are supported
+        # To prevent accidental placement, auto_put must be
+        # set to True on the Anchor's connected DB
+        if type(self.db) is DB:
+            if not self.db.auto_put:
+                raise RuntimeError('auto_put not enabled in DB')
+            self.db.delete_rels(name, self.content, a_to, q)
+
     def put_self(self):
         """Writes the Anchor to the connected database, if present.
 
