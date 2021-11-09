@@ -568,7 +568,7 @@ class DB:
 
         """
         self._ck_strargs_not_empty(a=a)
-        self.repo.put_a(a, q)
+        return self.repo.put_a(a, q)
 
     def put_rel(self, rel, a_from, a_to, q=None):
         """
@@ -588,7 +588,7 @@ class DB:
             a_from = a_from,
             a_to = a_to
         )
-        self.repo.put_rel(rel, a_from, a_to, q=q)
+        return self.repo.put_rel(rel, a_from, a_to, q=q)
 
     def set_a_q(self, s, q, **kwargs):
         """
@@ -923,6 +923,11 @@ class SQLiteRepo:
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, (term,))
 
+    def _slr_get_last_insert_rowid(self):
+        sc_rowid = "SELECT last_insert_rowid()"""
+        cs = self._db_conn.cursor()
+        return next(cs.execute(sc_rowid))[0]
+
     def _slr_config_to_dict(self, term='%'):
         """Reads database config table into dict"""
         sc = "SELECT {0},{1} FROM {2} WHERE {0} LIKE ?".format(
@@ -957,6 +962,7 @@ class SQLiteRepo:
         cs = self._slr_get_shared_cursor()
         cs.execute(sc, (item, q))
         self._db_conn.commit()
+        return {'_sql_rowid': self._slr_get_last_insert_rowid()}
 
     def _slr_a_where_clause(
             self, with_rels=False, is_alias=False, wildcards=True
@@ -1177,7 +1183,7 @@ class SQLiteRepo:
         backing store
 
         """
-        self._slr_insert_into_a(self._prep_a_nx(a, wildcards=False), q)
+        return self._slr_insert_into_a(self._prep_a_nx(a, wildcards=False), q)
 
     def set_a_q(self, a, q, **kwargs):
         """Handle DB request to assign a numerical quantity to an
@@ -1235,7 +1241,7 @@ class SQLiteRepo:
             )
         else: rtxt = self.reltxt_nx(name, a1, a2, wildcards=False)
         try:
-            self._slr_insert_into_a(rtxt, q)
+            return self._slr_insert_into_a(rtxt, q)
         except sqlite3.IntegrityError as x:
             if 'UNIQUE constraint failed' in x.args[0]:
                 raise ValueError('relation already exists')
