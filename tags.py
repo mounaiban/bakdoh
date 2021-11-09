@@ -22,8 +22,8 @@ from html import unescape
 from itertools import chain
 
 # Reserved symbols used as TAGS wildcards (same as Unix glob)
-CHAR_WC_1C = "\u002a" # single char only: Asterisk
-CHAR_WC_ZP = "\u003f" # zero or more chars: Question mark
+CHAR_WC_1C = "\u003f" # single char only: Question Mark
+CHAR_WC_ZP = "\u002a" # zero or more chars: Asterisk
 
 # NOTE: Escape sequences are used for the sake of precision,
 # based on the awareness that multiple forms of the symbols
@@ -632,8 +632,8 @@ class SQLiteRepo:
     Repository to manage a TAGS database in storage, using SQLite 3
 
     """
-    CHAR_WC_ZP_SQL = "\u005f" # Question Mark
-    CHAR_WC_1C_SQL = "\u0025" # Percent Sign
+    CHAR_WC_1C_SQL = "\u005f" # Underscore
+    CHAR_WC_ZP_SQL = "\u0025" # Percent Sign
     CHARS_DB_DEFAULT = {
         'CHAR_F_REL_SQL': "\u21e8", # relation marker (Arrow to the right)
         'CHAR_PX_AL_SQL': "\u0040", # alias marker (At-sign)
