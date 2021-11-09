@@ -595,7 +595,8 @@ class DB:
         Assign a numerical quantity q to an anchor 's'.
 
         """
-        self._ck_args_isnum(q=q, **kwargs)
+        if q is not None:
+            self._ck_args_isnum(q=q, **kwargs)
         self.repo.set_a_q(s, q, **kwargs)
 
     def set_rel_q(self, name, a_from, a_to, q, **kwargs):
@@ -604,7 +605,8 @@ class DB:
         a_from and a_to.
 
         """
-        self._ck_args_isnum(q=q, **kwargs)
+        if q is not None:
+            self._ck_args_isnum(q=q, **kwargs)
         self.repo.set_rel_q(name, a_from, a_to, q, **kwargs)
 
 class SQLiteRepo:
@@ -691,7 +693,7 @@ class SQLiteRepo:
             if 'no such table' in x.args[0]:
                 self._slr_create_tables()
                 self._slr_dict_to_config(self.CHARS_DB_DEFAULT)
-        config_temp = self._slr_config_to_dict()
+        config_temp = self._slr_config_to_dict('CHAR_%')
         for k in config_temp:
             if k.startswith('CHAR_F'):
                 c = config_temp[k]

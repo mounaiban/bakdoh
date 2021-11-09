@@ -1020,7 +1020,7 @@ class DBWriteTests(DBTests):
                     'comment': ['relations must be left unchanged'],
                 },
                 'method': 'set_a_q',
-                'init': (('a', 1), ('z', None), ('z', 'a', 'z', 0)),
+                'init': (('a', 1), ('z', 0), ('z', 'a', 'z', 0)),
                 'args_outs': (
                     {
                         'args': {'s': 'z', 'q': 2},
@@ -1029,6 +1029,10 @@ class DBWriteTests(DBTests):
                     {
                         'args': {'s': 'z', 'q': -2},
                         'final': [('a', 1), ('z', -2), ('z', 'a', 'z', 0)]
+                    },
+                    {
+                        'args': {'s': 'z', 'q': None},
+                        'final': [('a', 1), ('z', None), ('z', 'a', 'z', 0)]
                     },
                 ),
             },
@@ -1120,6 +1124,37 @@ class DBWriteTests(DBTests):
                     },
                 )
             }
+        }
+        self._run_tests(test_data)
+
+    def test_db_set_a_q_invalid(self):
+        """set_a_q: handle invalid arguments
+
+        Anchors and relations must be left unchanged
+        """
+        test_data = {
+            'set_a_q_invalid': {
+                'meta': {
+                    'description': {
+                        'en-au': 'set_a_q() on specific relation',
+                    },
+                    'comment': ['relations must be left unchanged'],
+                },
+                'method': 'set_a_q',
+                'init': (('a', 1), ('z', None), ('z', 'a', 'z', 0)),
+                'args_outs': (
+                    {
+                        'args': {'s': 'z', 'q': 'str'},
+                        'exception': 'TypeError',
+                        'final': [('a', 1), ('z', None), ('z', 'a', 'z', 0)]
+                    },
+                    {
+                        'args': {'s': 'a', 'q': []},
+                        'exception': 'TypeError',
+                        'final': [('a', 1), ('z', None), ('z', 'a', 'z', 0)]
+                    },
+                ),
+            },
         }
         self._run_tests(test_data)
 
@@ -1542,7 +1577,7 @@ class DBWriteTests(DBTests):
         test_data = {
             'set_rel_q': {
                 'method': 'set_rel_q',
-                'init': (('a', 1), ('z', 2), ('z', 'a', 'z', None)),
+                'init': (('a', 1), ('z', 2), ('z', 'a', 'z', 0)),
                 'args_outs': (
                     {
                         'subtest_name': 'set_rel_q_exact_rel_pos',
@@ -1557,6 +1592,13 @@ class DBWriteTests(DBTests):
                             'name': 'z', 'a_from':'a', 'a_to':'z', 'q': -2
                         },
                         'final': [('a', 1), ('z', 2), ('z', 'a', 'z', -2)]
+                    },
+                    {
+                        'subtest_name': 'set_rel_q_exact_rel_none',
+                        'args': {
+                            'name': 'z', 'a_from':'a', 'a_to':'z', 'q': None
+                        },
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', None)]
                     },
                 ),
             },
@@ -1612,6 +1654,36 @@ class DBWriteTests(DBTests):
             },
         }
         self._run_tests(test_data)
+
+    def test_set_rel_q_invalid(self):
+        """set_rel_q(): Handle invalid arguments
+
+        Anchors and relations must be left unchanged
+        """
+        test_data = {
+            'set_rel_q_invalid': {
+                'method': 'set_rel_q',
+                'init': (('a', 1), ('z', 2), ('z', 'a', 'z', 0)),
+                'args_outs': (
+                    {
+                        'subtest_name': 'set_rel_q_exact_rel_pos_invalid_L',
+                        'exception': 'TypeError',
+                        'args': {
+                            'name': 'z', 'a_from':'a', 'a_to':'z', 'q': []
+                        },
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', 0)]
+                    },
+                    {
+                        'subtest_name': 'set_rel_q_exact_rel_neg_invalid_S',
+                        'exception': 'TypeError',
+                        'args': {
+                            'name': 'z', 'a_from':'a', 'a_to':'z', 'q': 'notnum'
+                        },
+                        'final': [('a', 1), ('z', 2), ('z', 'a', 'z', 0)]
+                    },
+                ),
+            },
+        }
 
     def test_set_rel_q_casesen(self):
         test_data = {
