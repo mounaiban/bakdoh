@@ -1122,10 +1122,7 @@ class SQLiteRepo:
     def _has_wildcards(self, a):
         return True in map(lambda x: x in a, self.chars_wc)
 
-    def reltxt(self, namee, a1e, a2e, alias='local', alias_fmt=3):
-        return self.reltxt_nx(namee, a1e, a2e)
-
-    def reltxt_nx(self, name='*', a_from='*', a_to='*', **kwargs):
+    def _reltext(self, name='*', a_from='*', a_to='*', **kwargs):
         """
         Return a string representing a relation from ``a_from`` to
         ``a_to``, with name ``name``. This method is used for building
@@ -1143,7 +1140,7 @@ class SQLiteRepo:
             self._prep_a_nx(a_to, **kwargs),
         )
 
-    def reltxt_alias_rowid(self, name, a_from, a_to, out_format=3):
+    def _reltext_alias_rowid(self, name, a_from, a_to, out_format=3):
         """
         Aliased relations are intended to be space-efficient versions of
         relations between anchors with lengthy content
@@ -1282,7 +1279,7 @@ class SQLiteRepo:
                 a2,
                 out_format=kwargs.get('alias_format')
             )
-        else: rtxt = self.reltxt_nx(name, a1, a2, wildcards=False)
+        else: rtxt = self._reltext(name, a1, a2, wildcards=False)
         try:
             return self._slr_insert_into_a(rtxt, q)
         except sqlite3.IntegrityError as x:
@@ -1296,7 +1293,7 @@ class SQLiteRepo:
         for that method for usage.
 
         """
-        term = self.reltxt_nx(name, a_from, a_to, **kwargs)
+        term = self._reltext(name, a_from, a_to, **kwargs)
         self._slr_set_q(
             term,
             q,
@@ -1311,7 +1308,7 @@ class SQLiteRepo:
         documentation for that method for usage.
 
         """
-        term = self.reltxt_nx(name, a_from, a_to, **kwargs)
+        term = self._reltext(name, a_from, a_to, **kwargs)
         self._slr_incr_q(
             term,
             d,
@@ -1331,7 +1328,7 @@ class SQLiteRepo:
         name = kwargs.get('name', CHAR_WC_ZP)
         if a_to == CHAR_WC_ZP and a_from == CHAR_WC_ZP:
             raise ValueError("at least one of a_to or a_from must not be '*'")
-        term = self.reltxt_nx(name, a_from, a_to)
+        term = self._reltext(name, a_from, a_to)
         has_wc = self._has_wildcards(term)
         if kwargs.get('wildcards') is None:
             kwargs['wildcards'] = has_wc
@@ -1360,7 +1357,7 @@ class SQLiteRepo:
             """.format(self.col, self._char_rel, self.table_a)
         sc_where = self._slr_a_where_clause(with_rels=True)
         sc = "".join((sc_relnames, sc_where))
-        term = self.reltxt_nx(
+        term = self._reltext(
             s, kwargs.get('a_from', CHAR_WC_ZP), kwargs.get('a_to', CHAR_WC_ZP)
         )
         cs = kwargs.get('cursor', self._slr_get_shared_cursor())
@@ -1372,7 +1369,7 @@ class SQLiteRepo:
         documentation of that method for usage.
 
         """
-        term = self.reltxt_nx(
+        term = self._reltext(
             kwargs.get('name', '*'),
             kwargs.get('a_from', '*'),
             kwargs.get('a_to', '*')

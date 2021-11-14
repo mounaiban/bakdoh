@@ -31,8 +31,8 @@ class SlrDbExportTests(TestCase):
     """
     Verify the operation of SQLiteRepo's export function.
 
-    This test relies on the correctness of SQLiteRepo.reltxt().
-    Tests for reltxt() must pass for these tests to be valid.
+    This test relies on the correctness of SQLiteRepo._reltext().
+    Tests for _reltext() must pass for these tests to be valid.
 
     Unfortunately, tests for export() cannot be run under the
     generic DB class test suite as implementations for export()
@@ -43,16 +43,16 @@ class SlrDbExportTests(TestCase):
         # Most direct SQLiteRepo insert humanly possible
         self.testdb = DB(SQLiteRepo())
         sc_insert = "INSERT INTO {} VALUES(?,?)".format(SQLiteRepo.table_a)
-        reltxt = self.testdb.repo.reltxt
+        rt = self.testdb.repo._reltext
         cs = self.testdb.repo._db_conn.cursor()
         inp = (
             ('a', None),
             ('j', None),
             ('t', 0.0001),
             ('z', -274),
-            (reltxt('j', 'a', 'j'), None),
-            (reltxt('t', 'a', 't'), -274),
-            (reltxt('a', 'z', 'a'), 37)
+            (rt('j', 'a', 'j'), None),
+            (rt('t', 'a', 't'), -274),
+            (rt('a', 'z', 'a'), 37)
         )
         cs.executemany(sc_insert, inp)
 
@@ -87,8 +87,8 @@ class SlrDbImportTests(TestCase):
     """
     Verify the operation of SQLiteRepo's import function.
 
-    This test relies on the correctness of SQLiteRepo.reltxt().
-    Tests for reltxt() must pass for these tests to be valid.
+    This test relies on the correctness of SQLiteRepo._reltext().
+    Tests for _reltext() must pass for these tests to be valid.
 
     Unfortunately, tests for import_data() cannot be run under the
     generic DB class test suite as import_data() implementations
@@ -107,14 +107,14 @@ class SlrDbImportTests(TestCase):
             ('j', 'a', 'j', None),
             ('t', 'a', 't', -274)
         )
-        reltxt = testdb.repo.reltxt
+        rt = testdb.repo._reltext
         expected = (
             ('a', None),
             ('j', None),
             ('t', 0.0001),
             ('z', -274),
-            (reltxt('j', 'a', 'j'), None),
-            (reltxt('t', 'a', 't'), -274)
+            (rt('j', 'a', 'j'), None),
+            (rt('t', 'a', 't'), -274)
         )
         testdb.import_data(inp)
         sample = tuple(cs.execute(sc_dump))
@@ -153,7 +153,7 @@ class SlrDbWriteTests(DBWriteTests):
     RepoClass = SQLiteRepo
 
 class SLR_ReltextTests(TestCase):
-    """Tests for reltext()"""
+    """Tests for _reltext()"""
 
     def test_reltext(self):
         testrep = SQLiteRepo()
@@ -165,23 +165,20 @@ class SLR_ReltextTests(TestCase):
         argtests = (
             (
                 {
-                    'namee': 'Raz',
-                    'a1e': 'a',
-                    'a2e': 'z',
+                    'name': 'Raz',
+                    'a_from': 'a',
+                    'a_to': 'z',
                     'alias': 'local',
                     'alias_fmt': 0
                 },
                 'Raz{0}a{0}z'.format(char_rel)
             ),
         ) # format: (kwargs, expected_output)
-        # NOTE: this test makes an assumption that ROWIDs are always
-        # and strictly in order of insertion of the anchors
-        #
         for a in argtests:
             with self.subTest(a=a):
-                self.assertEqual(testrep.reltxt(**a[0]), a[1])
+                self.assertEqual(testrep._reltext(**a[0]), a[1])
 
-    def test_reltxt_alias(self):
+    def test_reltext_alias(self):
         testrep = SQLiteRepo()
         testdb = DB(testrep)
         data = [('a', None), ('z', None)]
@@ -223,7 +220,7 @@ class SLR_ReltextTests(TestCase):
         #
         for a in argtests:
             with self.subTest(a=a):
-                self.assertEqual(testrep.reltxt_alias_rowid(**a[0]), a[1])
+                self.assertEqual(testrep._reltext_alias_rowid(**a[0]), a[1])
 
     def test_reltext_alias_not_exist(self):
         testrep = SQLiteRepo()
@@ -231,7 +228,7 @@ class SLR_ReltextTests(TestCase):
         data = [('a', None), ('z', None)]
         testdb.import_data(data)
         with self.assertRaises(ValueError):
-            testdb.repo.reltxt_alias_rowid(name='Rnull', a_from='x', a_to='y')
+            testdb.repo._reltext_alias_rowid(name='Rnul', a_from='x', a_to='y')
 
 class SLR_QClauseTests(TestCase):
     """Tests for _slr_q_clause()"""
