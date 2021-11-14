@@ -1236,17 +1236,24 @@ class SQLiteRepo:
         """
         self._slr_incr_q(self._prep_a_nx(a), d, **kwargs)
 
-    def delete_a(self, a):
+    def delete_a(self, a, **kwargs):
         """Handle DB request to delete anchors. Accepts the same arguments
         as DB.delete_a(). Please see the documentation of that method
         for usage.
 
         """
         # TODO: Allow delete by quantity or quantity range?
+        if a == CHAR_WC_ZP:
+            raise ValueError("cowardly refusing to delete all anchors")
+        term = self._prep_a_nx(a)
+        has_wc = self._has_wildcards(term)
+        if kwargs.get('wildcards') is None:
+            kwargs['wildcards'] = has_wc
         sc_delete = "DELETE FROM {} ".format(self.table_a)
-        sc = "".join((sc_delete, self._slr_a_where_clause()))
+        sc_where = self._slr_a_where_clause(wildcards=has_wc)
+        sc = "".join((sc_delete, sc_where))
         cs = self._slr_get_shared_cursor()
-        cs.execute(sc, (self._prep_a_nx(a),))
+        cs.execute(sc, (term,))
         self._db_conn.commit()
 
     def put_rel(self, name, a1, a2, q=None, **kwargs):
@@ -1321,15 +1328,17 @@ class SQLiteRepo:
         # TODO: Allow delete by quantity or quantity range?
         a_from = kwargs.get('a_from', CHAR_WC_ZP)
         a_to = kwargs.get('a_to', CHAR_WC_ZP)
+        name = kwargs.get('name', CHAR_WC_ZP)
         if a_to == CHAR_WC_ZP and a_from == CHAR_WC_ZP:
-            raise ValueError("at least one of a_to or a_from is required")
-        term = self.reltxt_nx(kwargs.get('name', '*'), a_from, a_to)
+            raise ValueError("at least one of a_to or a_from must not be '*'")
+        term = self.reltxt_nx(name, a_from, a_to)
+        has_wc = self._has_wildcards(term)
+        if kwargs.get('wildcards') is None:
+            kwargs['wildcards'] = has_wc
         sc_delete = "DELETE FROM {} ".format(self.table_a)
-        sc_where = self._slr_a_where_clause(
-            with_rels=True, wildcards=self._has_wildcards(term)
-        )
+        sc_where = self._slr_a_where_clause(with_rels=True, wildcards=has_wc)
         sc = "".join((sc_delete, sc_where))
-        cs = self._slr_get_shared_cursor()
+        cs = self._db_conn.cursor()
         cs.execute(sc, (term,))
         self._db_conn.commit()
 

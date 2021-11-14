@@ -787,6 +787,21 @@ class DBWriteTests(DBTests):
                     },
                 ),
             },
+            'delete_a_exact_casesen': {
+                'meta': {
+                    'description': {
+                        'en-au': 'delete_a() by exact content',
+                    },
+                },
+                'method': 'delete_a',
+                'init': (('a', None), ('A', None), ('z', None),),
+                'args_outs': (
+                    {
+                        'args': {'a': 'a'},
+                        'final': [('A', None), ('z', None)]
+                    },
+                ),
+            },
             'delete_a_wc': {
                 'meta': {
                     'description': {
@@ -1258,6 +1273,33 @@ class DBWriteTests(DBTests):
                     },
                 ),
             },
+            'delete_rels_exact_casesen': {
+                'method': 'delete_rels',
+                'init': (
+                    ('aAaa', 1),
+                    ('AaAA', 10),
+                    ('zZzz', 2),
+                    ('ZZZZ', 20),
+                    ('ZAZA', 'ZZZZ', 'AaAA', 0),
+                    ('zaza', 'zZzz', 'aAaa', 1),
+                ),
+                'args_outs': (
+                    {
+                        'args': {
+                            'name': 'zaza',
+                            'a_from': 'zZzz',
+                            'a_to':'aAaa',
+                        },
+                        'final': [
+                            ('aAaa', 1),
+                            ('AaAA', 10),
+                            ('zZzz', 2),
+                            ('ZZZZ', 20),
+                            ('ZAZA', 'ZZZZ', 'AaAA', 0),
+                        ]
+                    },
+                ),
+            }
         }
         self._run_tests(test_data)
 
