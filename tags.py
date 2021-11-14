@@ -147,41 +147,59 @@ class Anchor:
         )
 
 class DB:
-    # Database interface class for loading and storing anchors to a
-    # database. Connect a backing store via a repository class
-    # (such as SQLiteRepo) to start using databases.
-    #
-    # This class also serves as a reference interface for repositories
-    #
-    # TODO: DB case sensitivity is still not finalised at this stage;
-    # for now:
-    #
-    # * get_a() is case-sensitive only when no wildcards are used
-    #
-    # * get_rels() is case-sensitive only when source and destination
-    #   anchors are specified, along with the relation name, all without
-    #   wildcards.
-    #
-    # * both methods are case-insensitive under all other circumstances
-    #
+    """
+    Interface class to access TAGS databases.
 
+    This class provides access to a graph database via an abstract
+    interface, allowing multiple databases of different implementations
+    and backing stores to be used together without any need for
+    awareness of implementation details for the most features.
+
+    In order to access a database, wrap this class around a Repository
+    class which will access the backing store which loads and saves
+    database content to storage.
+
+    This class may also be used as a reference for implementing
+    repositories.
+
+    Notes
+    =====
+    Case sensitivity (for text scripts with case) is still not
+    finalised at this stage.
+
+    For now, operations are case-sensitive only when relation names,
+    source and destination are fully specified without wildcards.
+
+    """
     num_args = ('q', 'q_eq', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
     default_out_format = 0x7
 
     def __init__(self, repo, **kwargs):
-        # Prepare repository 'repo' beforehand, then set up a DB
-        # like: DB(repo)
-        #
-        # Please see the documentation for the repository class
-        # for details on how to create or load databases
-        #
-        # * auto_put: when True, Anchors make requests to the
-        #   linked database to save changes made to the object.
-        #
-        # * auto_get: when True, new Anchors will automatically
-        #   fetch the q-value when a new Anchor object is created
-        #   with contents matching an existing Anchor in the DB.
-        #
+        """
+        To use, prepare a repository 'repo' beforehand, then wrap
+        a DB around it, for example:
+
+        d = DB(SQLiteRepo('example.tags.sqlite3'))
+
+        alternatively:
+
+        r = SQLiteRepo('example.tags.sqlite3')
+        d = DB(r)
+
+        SQLiteRepository is a TAGS built-in class which loads and
+        stores TAGS databases in SQLite 3 database files.
+
+        Keyword Arguments
+        =================
+        * auto_put : When set to True, this allows linked Anchors to
+          automatically request themselves to be saved to the database
+          if they are not found in the database, or when the q-value
+          is updated.
+
+        * auto_get : When set to True, this allows linked Anchors to
+          fetch the q-value when they are created.
+
+        """
         self.repo = repo
         self.auto_put = kwargs.get('auto_put', False)
         self.auto_get = kwargs.get('auto_get', True)
