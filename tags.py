@@ -214,7 +214,7 @@ class DB:
                 if type(kwargs[a]) not in (int, float):
                     raise TypeError('argument {} must be a number'.format(a))
 
-    def _ck_strargs_not_empty(self, ck_args=('a', 'a_from', 'a_to'), **kwargs):
+    def _ck_args_str_not_empty(self, ck_args=('a', 'a_from', 'a_to'), **kwargs):
         for a in kwargs:
             if a in ck_args:
                 if type(a) is not str:
@@ -603,7 +603,7 @@ class DB:
         per database.
 
         """
-        self._ck_strargs_not_empty(a=a)
+        self._ck_args_str_not_empty(a=a)
         return self.repo.put_a(a, q)
 
     def put_rel(self, rel, a_from, a_to, q=None):
@@ -618,7 +618,7 @@ class DB:
         """
         # TODO: returning information about the anchor/relation
         # from invoking put_rel() or put_a() may be helpful
-        self._ck_strargs_not_empty(
+        self._ck_args_str_not_empty(
             ck_args=('rel', 'a_from', 'a_to'),
             rel = rel,
             a_from = a_from,
