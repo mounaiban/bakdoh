@@ -659,13 +659,16 @@ class SQLiteRepo:
     }
     table_a = "a"
     table_config = "config"
+    LIMITS_DEFAULT = {
+        'LIMIT_RESULTS': 32,
+        'LIMIT_CONTENT_LEN': 128
+    }
     char_escape = '\\'
     chars_wc = ""
     col_content= "content"
     col_q = "q"
     col_config_key = "key"
     col_config_value = "v"
-    limit = 32
     trans_wc = {
         CHAR_WC_1C: CHAR_WC_1C_SQL,
         CHAR_WC_ZP: CHAR_WC_ZP_SQL,
@@ -716,6 +719,8 @@ class SQLiteRepo:
         self._db_path = db_path
         self._db_conn = sqlite3.connect(self.uri, uri=True)
         self._db_cus = None
+        self._limit_results = None
+        self._limit_content_len = None
         self.special_chars = {
             "E": self.char_escape, "F": "", "PX": "", "WC": ""
         }
@@ -729,20 +734,24 @@ class SQLiteRepo:
             if 'no such table' in x.args[0]:
                 self._slr_create_tables()
                 self._slr_dict_to_config(self.CHARS_DB_DEFAULT)
-        config_temp = self._slr_config_to_dict('CHAR_%')
-        for k in config_temp:
+                self._slr_dict_to_config(self.LIMITS_DEFAULT)
+        config_chars = self._slr_config_to_dict('CHAR_%')
+        config_limits = self._slr_config_to_dict('LIMIT_%')
+        for k in config_chars:
             if k.startswith('CHAR_F'):
-                c = config_temp[k]
+                c = config_chars[k]
                 self._trans_f[ord(c)] = escape(c)
                 self.special_chars['F'] = "".join((c, self.special_chars['F']))
             if k.startswith('CHAR_PX'):
-                c = config_temp[k]
+                c = config_chars[k]
                 self._chars_px = "".join((self._chars_px, c))
                 self.special_chars['PX'] = self._chars_px
                 self._trans_px[ord(c)] = escape(c)
         self.special_chars["WC"] = self.chars_wc
-        self._char_rel = config_temp['CHAR_F_REL_SQL']
-        self._char_alias = config_temp['CHAR_PX_AL_SQL']
+        self._char_rel = config_chars['CHAR_F_REL_SQL']
+        self._char_alias = config_chars['CHAR_PX_AL_SQL']
+        self._limit_results = config_limits['LIMIT_RESULTS']
+        self._limit_content_len = config_limits['LIMIT_CONTENT_LEN']
 
     def __repr__(self):
         return "{}({}, uri={})".format(
