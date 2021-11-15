@@ -99,7 +99,7 @@ class Anchor:
 
     def unlink(self, name, a_to):
         # Remove relations from this anchor. Wildcards are supported
-        # To prevent accidental placement, auto_put must be
+        # To prevent accidental deletion, auto_put must be
         # set to True on the Anchor's connected DB
         if type(self.db) is DB:
             if not self.db.auto_put:
@@ -124,22 +124,22 @@ class Anchor:
             # Anchor not found in db
             self.db.put_a(self.content, self.q)
 
-    def rels_out(self, s):
+    def rels_out(self, s=CHAR_WC_ZP):
         # get names of relations linked from this anchor matching a pattern
         return self.db.get_rel_names(s, a_from=self.content)
 
-    def rels_in(self, s):
+    def rels_in(self, s=CHAR_WC_ZP):
         # get names of relations linked to this anchor matching a pattern
         return self.db.get_rel_names(s, a_to=self.content)
 
-    def related_to(self, rel):
+    def related_to(self, rel=CHAR_WC_ZP):
         # Get anchors in relations matching rel linked from this anchor
         return (
             (a[0],a[2],a[3])
             for a in self.db.get_rels(name=rel, a_from=self.content)
         )
 
-    def related_from(self, rel):
+    def related_from(self, rel=CHAR_WC_ZP):
         # Get anchors in relations matching rel linked to this anchor
         return (
             (a[0],a[1],a[3])
