@@ -661,7 +661,7 @@ class SQLiteRepo:
     table_config = "config"
     char_escape = '\\'
     chars_wc = ""
-    col = "content"
+    col_content= "content"
     col_q = "q"
     col_config_key = "key"
     col_config_value = "v"
@@ -825,7 +825,7 @@ class SQLiteRepo:
             self.table_a
         )
         sc_ck = "SELECT COUNT(*) FROM {} WHERE {} = ?".format(
-            self.table_a, self.col
+            self.table_a, self.col_content
         )
         for a in anchors:
             term = None
@@ -862,7 +862,7 @@ class SQLiteRepo:
             SELECT COUNT(*) FROM {0}
             WHERE {1} LIKE '%' AND {2} LIKE '%'
             LIMIT 1
-        """.format(self.table_a, self.col, self.col_q)
+        """.format(self.table_a, self.col_content, self.col_q)
         cs = self._slr_get_shared_cursor()
         cs.execute(sc_ck)
 
@@ -873,7 +873,7 @@ class SQLiteRepo:
         """
         sc_table_a = """
             CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {})
-            """.format(self.table_a, self.col, self.col_q)
+            """.format(self.table_a, self.col_content, self.col_q)
         sc_table_c = """
             CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {} NOT NULL)
             """.format(
@@ -928,7 +928,7 @@ class SQLiteRepo:
         """
         params = [ae,]
         sc_select = "SELECT {}, {} FROM {} ".format(
-            self.col, self.col_q, self.table_a,
+            self.col_content, self.col_q, self.table_a,
         )
         sc_where = self._slr_a_where_clause(
             with_rels=kwargs.get('with_rels', False),
@@ -953,7 +953,9 @@ class SQLiteRepo:
 
     def _slr_get_rowids(self, a, **kwargs):
         """Returns SQLite ROWIDs for anchors matching a"""
-        sc_rowid = "SELECT ROWID, {} from {} ".format(self.col, self.table_a)
+        sc_rowid = "SELECT ROWID, {} from {} ".format(
+            self.col_content, self.table_a
+        )
         sc = "".join((sc_rowid, self._slr_a_where_clause(),))
         term = self._prep_term(a)
         cs = kwargs.get('cursor', self._db_conn.cursor())
@@ -1026,12 +1028,12 @@ class SQLiteRepo:
         else:
             if wildcards:
                 out = "".join((out, "{} LIKE ? ESCAPE '{}' ".format(
-                    self.col, self.char_escape)))
+                    self.col_content, self.char_escape)))
             else:
-                out = "".join((out, "{} = ? ".format(self.col)))
+                out = "".join((out, "{} = ? ".format(self.col_content)))
         if not with_rels:
             out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
-                        self.col, self._char_rel)))
+                        self.col_content, self._char_rel)))
         return out
 
     def _slr_q_clause(self, **kwargs):
@@ -1354,7 +1356,7 @@ class SQLiteRepo:
         """
         sc_relnames = """
             SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
-            """.format(self.col, self._char_rel, self.table_a)
+            """.format(self.col_content, self._char_rel, self.table_a)
         sc_where = self._slr_a_where_clause(with_rels=True)
         sc = "".join((sc_relnames, sc_where))
         term = self._reltext(
