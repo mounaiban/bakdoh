@@ -42,7 +42,7 @@ class SlrDbExportTests(TestCase):
     def setUp(self):
         # Most direct SQLiteRepo insert humanly possible
         self.testdb = DB(SQLiteRepo())
-        sc_insert = "INSERT INTO {} VALUES(?,?)".format(SQLiteRepo.table_a)
+        sc_insert = "INSERT INTO {} VALUES(?,?)".format(SQLiteRepo.TABLE_A)
         rt = self.testdb.repo._reltext
         cs = self.testdb.repo._db_conn.cursor()
         inp = (
@@ -97,7 +97,7 @@ class SlrDbImportTests(TestCase):
     """
     def test_import(self):
         testdb = DB(SQLiteRepo())
-        sc_dump = "SELECT * FROM {}".format(SQLiteRepo.table_a)
+        sc_dump = "SELECT * FROM {}".format(SQLiteRepo.TABLE_A)
         cs = testdb.repo._db_conn.cursor()
         inp = (
             ('a',),
@@ -124,7 +124,7 @@ class SlrDbImportTests(TestCase):
         """import_data(): reject unsupported formats"""
 
         testdb = DB(SQLiteRepo())
-        sc_dump = "SELECT * FROM {}".format(SQLiteRepo.table_a)
+        sc_dump = "SELECT * FROM {}".format(SQLiteRepo.TABLE_A)
         cs = testdb.repo._db_conn.cursor()
         inp = (
             ('a', 0.1, 0.5, 0.75, 1.1),
@@ -270,7 +270,7 @@ class SLR_QClauseTests(TestCase):
           # PROTIP: {0} will be replaced with q-value column name
         for x, y in argtests:
             with self.subTest(args=x):
-                expected = (y[0].format(testrep.col_q), y[1])
+                expected = (y[0].format(testrep.COL_Q), y[1])
                 self.assertEqual(testrep._slr_q_clause(**x), expected)
 
     def test_not(self):
@@ -282,7 +282,7 @@ class SLR_QClauseTests(TestCase):
         )
         for x, y in argtests:
             with self.subTest(args=x):
-                expected = (y[0].format(testrep.col_q), y[1])
+                expected = (y[0].format(testrep.COL_Q), y[1])
                 self.assertEqual(testrep._slr_q_clause(**x), expected)
 
 class SlrPrepTermTests(TestCase):
@@ -290,7 +290,7 @@ class SlrPrepTermTests(TestCase):
 
     def setUp(self):
         self.testrepo = SQLiteRepo()
-        self.escape = self.testrepo.char_escape
+        self.escape = self.testrepo.CHAR_ESCAPE
         self.alias = self.testrepo._char_alias
 
     def test_prep_term_alias(self):

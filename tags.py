@@ -650,33 +650,35 @@ class SQLiteRepo:
     Repository to manage a TAGS database in storage, using SQLite 3
 
     """
-    CHAR_WC_1C_SQL = "\u005f" # Underscore
-    CHAR_WC_ZP_SQL = "\u0025" # Percent Sign
     CHARS_DB_DEFAULT = {
         'CHAR_F_REL_SQL': "\u21e8", # relation marker (Arrow to the right)
         'CHAR_PX_AL_SQL': "\u0040", # alias marker (At-sign)
         'CHAR_PX_T_SQL': "\u220a",  # type marker (Small element-of symbol)
     }
-    table_a = "a"
-    table_config = "config"
+    CHAR_ESCAPE = '\\'
+    CHAR_WC_1C_SQL = "\u005f" # Underscore
+    CHAR_WC_ZP_SQL = "\u0025" # Percent Sign
+    CHARS_WC = ""  # populated at runtime, see Setup below
+    COL_CONFIG_KEY = "key"
+    COL_CONFIG_VALUE = "v"
+    COL_CONTENT = "content"
+    COL_Q = "q"
     LIMITS_DEFAULT = {
         'LIMIT_RESULTS': 32,
         'LIMIT_CONTENT_LEN': 128
     }
-    char_escape = '\\'
-    chars_wc = ""
-    col_content= "content"
-    col_q = "q"
-    col_config_key = "key"
-    col_config_value = "v"
-    trans_wc = {
+    TABLE_A = "a"
+    TABLE_CONFIG = "config"
+    TRANS_WC = {
         CHAR_WC_1C: CHAR_WC_1C_SQL,
         CHAR_WC_ZP: CHAR_WC_ZP_SQL,
-        CHAR_WC_1C_SQL: "{}{}".format(char_escape, CHAR_WC_1C_SQL),
-        CHAR_WC_ZP_SQL: "{}{}".format(char_escape, CHAR_WC_ZP_SQL)
+        CHAR_WC_1C_SQL: "{}{}".format(CHAR_ESCAPE, CHAR_WC_1C_SQL),
+        CHAR_WC_ZP_SQL: "{}{}".format(CHAR_ESCAPE, CHAR_WC_ZP_SQL)
     }
-    for c in trans_wc.keys():
-        chars_wc = "".join((chars_wc, c))
+    # Setup
+    for c in TRANS_WC.keys():
+        CHARS_WC = "".join((CHARS_WC, c))
+    TRANS_WC = str.maketrans(TRANS_WC)
 
     def __init__(self, db_path=None, mode="rwc", **kwargs):
         """
@@ -712,22 +714,21 @@ class SQLiteRepo:
         if db_path is None:
             db_path = "test.sqlite3"
             mode = 'memory'
+        self.special_chars = {
+            "E": self.CHAR_ESCAPE, "F": "", "PX": "", "WC": self.CHARS_WC
+        }
         self.uri = "file:{}?mode={}".format(db_path, mode)
         self._char_al = None
         self._char_rel = None
         self._chars_px = ""
-        self._db_path = db_path
         self._db_conn = sqlite3.connect(self.uri, uri=True)
         self._db_cus = None
-        self._limit_results = None
+        self._db_path = db_path
         self._limit_content_len = None
-        self.special_chars = {
-            "E": self.char_escape, "F": "", "PX": "", "WC": ""
-        }
+        self._limit_results = None
         self._trans_f = {}
         self._trans_px = {}
-        self.trans_wc = str.maketrans(self.trans_wc)
-        # Setup
+        # Setup: detect and create SQLite tables
         try:
             self._slr_ck_tables()
         except sqlite3.OperationalError as x:
@@ -735,6 +736,7 @@ class SQLiteRepo:
                 self._slr_create_tables()
                 self._slr_dict_to_config(self.CHARS_DB_DEFAULT)
                 self._slr_dict_to_config(self.LIMITS_DEFAULT)
+        # Setup: set config from SQLite file
         config_chars = self._slr_config_to_dict('CHAR_%')
         config_limits = self._slr_config_to_dict('LIMIT_%')
         for k in config_chars:
@@ -745,13 +747,12 @@ class SQLiteRepo:
             if k.startswith('CHAR_PX'):
                 c = config_chars[k]
                 self._chars_px = "".join((self._chars_px, c))
-                self.special_chars['PX'] = self._chars_px
                 self._trans_px[ord(c)] = escape(c)
-        self.special_chars["WC"] = self.chars_wc
-        self._char_rel = config_chars['CHAR_F_REL_SQL']
+                self.special_chars['PX'] = self._chars_px
         self._char_alias = config_chars['CHAR_PX_AL_SQL']
-        self._limit_results = config_limits['LIMIT_RESULTS']
+        self._char_rel = config_chars['CHAR_F_REL_SQL']
         self._limit_content_len = config_limits['LIMIT_CONTENT_LEN']
+        self._limit_results = config_limits['LIMIT_RESULTS']
 
     def __repr__(self):
         return "{}({}, uri={})".format(
@@ -814,7 +815,7 @@ class SQLiteRepo:
                 else: return a
             else:
                 i = self._index_prefix(a, self._trans_px.values())
-                out = a.translate(self.trans_wc)
+                out = a.translate(self.TRANS_WC)
                 out = "".join((out[:i], unescape(out[i:])))
                 return out.translate(self._trans_f)
 
@@ -831,10 +832,10 @@ class SQLiteRepo:
         """
         anchors = (kwargs['a1e'], kwargs['a2e'])
         sc_ck_alias = "SELECT COUNT(*) FROM {} WHERE ROWID = ?".format(
-            self.table_a
+            self.TABLE_A
         )
         sc_ck = "SELECT COUNT(*) FROM {} WHERE {} = ?".format(
-            self.table_a, self.col_content
+            self.TABLE_A, self.COL_CONTENT
         )
         for a in anchors:
             term = None
@@ -871,7 +872,7 @@ class SQLiteRepo:
             SELECT COUNT(*) FROM {0}
             WHERE {1} LIKE '%' AND {2} LIKE '%'
             LIMIT 1
-        """.format(self.table_a, self.col_content, self.col_q)
+        """.format(self.TABLE_A, self.COL_CONTENT, self.COL_Q)
         cs = self._slr_get_shared_cursor()
         cs.execute(sc_ck)
 
@@ -882,13 +883,13 @@ class SQLiteRepo:
         """
         sc_table_a = """
             CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {})
-            """.format(self.table_a, self.col_content, self.col_q)
+            """.format(self.TABLE_A, self.COL_CONTENT, self.COL_Q)
         sc_table_c = """
             CREATE TABLE IF NOT EXISTS {}({} UNIQUE NOT NULL, {} NOT NULL)
             """.format(
-                self.table_config,
-                self.col_config_key,
-                self.col_config_value
+                self.TABLE_CONFIG,
+                self.COL_CONFIG_KEY,
+                self.COL_CONFIG_VALUE
             )
         cs = self._slr_get_shared_cursor()
         cs.execute(sc_table_a)
@@ -898,7 +899,7 @@ class SQLiteRepo:
         # PROTIP: also works with relations; relations are special anchors
         if kwargs.get('wildcards') is None:
             kwargs['wildcards'] = self._has_wildcards(ae)
-        sc_set = "UPDATE {} SET {} = ? ".format(self.table_a, self.col_q)
+        sc_set = "UPDATE {} SET {} = ? ".format(self.TABLE_A, self.COL_Q)
         sc = "".join((sc_set, self._slr_a_where_clause(
             with_rels=with_rels, wildcards=kwargs.get('wildcards', True)
         )))
@@ -914,7 +915,7 @@ class SQLiteRepo:
     def _slr_incr_q(self, ae, d, with_rels=False, **kwargs):
         if kwargs.get('wildcards') is None:
             kwargs['wildcards'] = self._has_wildcards(ae)
-        sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.table_a, self.col_q)
+        sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.TABLE_A, self.COL_Q)
         sc = "".join((sc_incr, self._slr_a_where_clause(with_rels=with_rels)))
         params = [d, ae]
         if kwargs:
@@ -937,7 +938,7 @@ class SQLiteRepo:
         """
         params = [ae,]
         sc_select = "SELECT {}, {} FROM {} ".format(
-            self.col_content, self.col_q, self.table_a,
+            self.COL_CONTENT, self.COL_Q, self.TABLE_A,
         )
         sc_where = self._slr_a_where_clause(
             with_rels=kwargs.get('with_rels', False),
@@ -963,7 +964,7 @@ class SQLiteRepo:
     def _slr_get_rowids(self, a, **kwargs):
         """Returns SQLite ROWIDs for anchors matching a"""
         sc_rowid = "SELECT ROWID, {} from {} ".format(
-            self.col_content, self.table_a
+            self.COL_CONTENT, self.TABLE_A
         )
         sc = "".join((sc_rowid, self._slr_a_where_clause(),))
         term = self._prep_term(a)
@@ -978,7 +979,7 @@ class SQLiteRepo:
     def _slr_config_to_dict(self, term='%'):
         """Reads database config table into dict"""
         sc = "SELECT {0},{1} FROM {2} WHERE {0} LIKE ?".format(
-            self.col_config_key, self.col_config_value, self.table_config
+            self.COL_CONFIG_KEY, self.COL_CONFIG_VALUE, self.TABLE_CONFIG
         )
         cs = self._db_conn.cursor()
         rows = cs.execute(sc, (term,))
@@ -988,7 +989,7 @@ class SQLiteRepo:
 
     def _slr_dict_to_config(self, confdict):
         """Writes a dict to the database config table"""
-        sc = "INSERT INTO {} VALUES(?,?)".format(self.table_config)
+        sc = "INSERT INTO {} VALUES(?,?)".format(self.TABLE_CONFIG)
         cs = self._slr_get_shared_cursor()
         for k in confdict:
             cs.execute(sc, (k, confdict[k]))
@@ -1005,7 +1006,7 @@ class SQLiteRepo:
         if q is not None:
             if type(q) not in (int, float):
                 raise TypeError('q must be a number')
-        sc = 'INSERT INTO {} VALUES(?, ?)'.format(self.table_a)
+        sc = 'INSERT INTO {} VALUES(?, ?)'.format(self.TABLE_A)
         cs = self._slr_get_shared_cursor()
         cs.execute(sc, (item, q))
         self._db_conn.commit()
@@ -1037,12 +1038,12 @@ class SQLiteRepo:
         else:
             if wildcards:
                 out = "".join((out, "{} LIKE ? ESCAPE '{}' ".format(
-                    self.col_content, self.char_escape)))
+                    self.COL_CONTENT, self.CHAR_ESCAPE)))
             else:
-                out = "".join((out, "{} = ? ".format(self.col_content)))
+                out = "".join((out, "{} = ? ".format(self.COL_CONTENT)))
         if not with_rels:
             out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
-                        self.col_content, self._char_rel)))
+                        self.COL_CONTENT, self._char_rel)))
         return out
 
     def _slr_q_clause(self, **kwargs):
@@ -1095,26 +1096,26 @@ class SQLiteRepo:
         if 'q_eq' in kwargs:
             # exact
             lbe = kwargs['q_eq']
-            lbe_expr = "{} = ?".format(self.col_q)
+            lbe_expr = "{} = ?".format(self.COL_Q)
             params.append(lbe)
         else:
             # lower bound
             if 'q_gt' in kwargs:
                 lbe = kwargs['q_gt']
-                lbe_expr = "{} > ?".format(self.col_q)
+                lbe_expr = "{} > ?".format(self.COL_Q)
                 params.append(lbe)
             elif 'q_gte' in kwargs:
                 lbe = kwargs['q_gte']
-                lbe_expr = "{} >= ?".format(self.col_q)
+                lbe_expr = "{} >= ?".format(self.COL_Q)
                 params.append(lbe)
             # upper bound
             if 'q_lt' in kwargs:
                 ub = kwargs['q_lt']
-                ub_expr = "{} < ?".format(self.col_q)
+                ub_expr = "{} < ?".format(self.COL_Q)
                 params.append(ub)
             elif 'q_lte' in kwargs:
                 ub = kwargs['q_lte']
-                ub_expr = "{} <= ?".format(self.col_q)
+                ub_expr = "{} <= ?".format(self.COL_Q)
                 params.append(ub)
             if lbe is not None and ub is not None:
                 if lbe < ub:
@@ -1131,7 +1132,7 @@ class SQLiteRepo:
             return (clause, params)
 
     def _has_wildcards(self, a):
-        return True in map(lambda x: x in a, self.chars_wc)
+        return True in map(lambda x: x in a, self.CHARS_WC)
 
     def _reltext(self, name='*', a_from='*', a_to='*', **kwargs):
         """
@@ -1257,7 +1258,7 @@ class SQLiteRepo:
         has_wc = self._has_wildcards(term)
         if kwargs.get('wildcards') is None:
             kwargs['wildcards'] = has_wc
-        sc_delete = "DELETE FROM {} ".format(self.table_a)
+        sc_delete = "DELETE FROM {} ".format(self.TABLE_A)
         sc_where = self._slr_a_where_clause(wildcards=has_wc)
         sc = "".join((sc_delete, sc_where))
         cs = self._slr_get_shared_cursor()
@@ -1343,7 +1344,7 @@ class SQLiteRepo:
         has_wc = self._has_wildcards(term)
         if kwargs.get('wildcards') is None:
             kwargs['wildcards'] = has_wc
-        sc_delete = "DELETE FROM {} ".format(self.table_a)
+        sc_delete = "DELETE FROM {} ".format(self.TABLE_A)
         sc_where = self._slr_a_where_clause(with_rels=True, wildcards=has_wc)
         sc = "".join((sc_delete, sc_where))
         cs = self._db_conn.cursor()
@@ -1365,7 +1366,7 @@ class SQLiteRepo:
         """
         sc_relnames = """
             SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
-            """.format(self.col_content, self._char_rel, self.table_a)
+            """.format(self.COL_CONTENT, self._char_rel, self.TABLE_A)
         sc_where = self._slr_a_where_clause(with_rels=True)
         sc = "".join((sc_relnames, sc_where))
         term = self._reltext(
