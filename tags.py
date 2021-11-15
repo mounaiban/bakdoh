@@ -104,7 +104,7 @@ class Anchor:
         if type(self.db) is DB:
             if not self.db.auto_put:
                 raise RuntimeError('auto_put not enabled in DB')
-            self.db.delete_rels(name, self.content, a_to, q)
+            self.db.delete_rels(name=name, a_from=self.content, a_to=a_to)
 
     def put_self(self):
         """Writes the Anchor to the connected database, if present.
