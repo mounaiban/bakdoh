@@ -618,6 +618,8 @@ class DB:
         """
         # TODO: returning information about the anchor/relation
         # from invoking put_rel() or put_a() may be helpful
+        if a_from == a_to:
+            raise ValueError('cannot link {} to itself'.format(a_from))
         self._ck_args_str_not_empty(
             ck_args=('rel', 'a_from', 'a_to'),
             rel = rel,
@@ -849,15 +851,6 @@ class SQLiteRepo:
             r = next(cs.execute(sc, (term,)))
             if r[0] <= 0:
                 raise ValueError('both anchors must exist')
-
-    def _slr_ck_rel_self(self, **kwargs):
-        """
-        Prevent self-linking of anchors, by checking if both anchors
-        nominated for put_rel() are the same.
-
-        """
-        if kwargs['a1e'] == kwargs['a2e']:
-            raise ValueError('self-linking relations not allowed')
 
     def _slr_ck_tables(self):
         """
@@ -1279,7 +1272,6 @@ class SQLiteRepo:
 
         """
         ck_fns = (
-            self._slr_ck_rel_self,
             self._slr_ck_anchors_exist,
         )
         for f in ck_fns:
