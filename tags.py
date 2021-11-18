@@ -821,23 +821,29 @@ class SQLiteRepo:
                 out = "".join((out[:i], unescape(out[i:])))
                 return out.translate(self._trans_f)
 
-    def _slr_ck_anchors_exist(self, **kwargs):
+    def _slr_ck_anchors_exist(self, anchors):
         """
-        Check if anchors exist, before creating relations
+        Check if anchors exist. Can also be used for relations, given
+        relations are herein specially-formed anchors.
+
+        Returns a 2-tuple like (result, anchor) where:
+
+        * result : True if all anchors exist
+
+        * anchor : either None if all anchors exist, or the first
+          anchor that was found not to exist.
 
         Arguments
         =========
-        a1e, a2e: anchors, with all special characters escaped
-        or anchor aliases, like @n, where n is the anchor's ROWID
-        in the SQLite backend.
+        Any keyword argument with a key starting with 'a' is regarded
+        as an anchor. All anchors will be checked.
 
         """
-        anchors = (kwargs['a1e'], kwargs['a2e'])
         sc_ck_alias = "SELECT COUNT(*) FROM {} WHERE ROWID = ?".format(
             self.TABLE_A
         )
-        sc_ck = "SELECT COUNT(*) FROM {} WHERE {} = ?".format(
-            self.TABLE_A, self.COL_CONTENT
+        sc_ck = "SELECT COUNT(*) FROM {} WHERE substr({}, 1, {}) = ?".format(
+            self.TABLE_A, self.COL_CONTENT, self._limit_content_len
         )
         for a in anchors:
             term = None
@@ -850,7 +856,8 @@ class SQLiteRepo:
             cs = self._slr_get_shared_cursor()
             r = next(cs.execute(sc, (term,)))
             if r[0] <= 0:
-                raise ValueError('both anchors must exist')
+                return (False, term)
+        else: return (True, None)
 
     def _slr_ck_tables(self):
         """
@@ -1271,11 +1278,9 @@ class SQLiteRepo:
           the 'prep_a' argument to False.
 
         """
-        ck_fns = (
-            self._slr_ck_anchors_exist,
-        )
-        for f in ck_fns:
-            f(namee=name, a1e=a1, a2e=a2)
+        ck = self._slr_ck_anchors_exist((a1, a2))
+        if not ck[0]:
+            raise ValueError('anchor {} not found'.format(ck[1]))
         if kwargs.get('alias_format', 0x0):
             rtxt = self.reltxt_alias_rowid(
                 name,
