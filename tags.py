@@ -852,12 +852,12 @@ class SQLiteRepo:
                 term = int(a[1:])
             else:
                 sc = sc_ck
-                term = a
+                term = a[:self._limit_content_len]
             cs = self._slr_get_shared_cursor()
             r = next(cs.execute(sc, (term,)))
             if r[0] <= 0:
                 return (False, term)
-        else: return (True, None)
+        return (True, None)
 
     def _slr_ck_tables(self):
         """
@@ -1228,6 +1228,10 @@ class SQLiteRepo:
         backing store
 
         """
+        ck = self._slr_ck_anchors_exist((a,))
+        if ck[0]:
+            apre = a[:self._limit_content_len]
+            raise ValueError('anchor starting with {} exists'.format(apre))
         return self._slr_insert_into_a(self._prep_a_nx(a, wildcards=False), q)
 
     def set_a_q(self, a, q, **kwargs):
