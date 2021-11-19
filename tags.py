@@ -322,7 +322,7 @@ class DB:
         # TODO: enable selective export by q-values
         fmt = kwargs.get('out_format', 'interchange')
         fmt_i = 'interchange'
-        anchs = self.get_a(a, out_format=fmt_i)
+        anchs = self.get_a(a, out_format=fmt_i, length=None)
         rels_a = self.get_rels(name=relname, a_from=a, out_format=fmt_i)
         rels_b = ()
         if a != '*':
@@ -730,6 +730,7 @@ class SQLiteRepo:
         self._limit_results = None
         self._trans_f = {}
         self._trans_px = {}
+        self._subclause_preface = None
         # Setup: detect and create SQLite tables
         try:
             self._slr_ck_tables()
@@ -755,6 +756,9 @@ class SQLiteRepo:
         self._char_rel = config_chars['CHAR_F_REL_SQL']
         self._limit_content_len = config_limits['LIMIT_CONTENT_LEN']
         self._limit_results = config_limits['LIMIT_RESULTS']
+        self._subclause_preface = "substr({}, 1, {})".format(
+            self.COL_CONTENT, self._limit_content_len
+        )
 
     def __repr__(self):
         return "{}({}, uri={})".format(
@@ -936,14 +940,24 @@ class SQLiteRepo:
         (q_lt or q_lte), q_not
 
         """
-        params = [ae,]
-        sc_select = "SELECT {}, {} FROM {} ".format(
-            self.COL_CONTENT, self.COL_Q, self.TABLE_A,
-        )
+        start = kwargs.get('start', 1)
+        length = kwargs.get('length', self._limit_content_len)
+        params = [start, length, ae]
+        sc_select = ""
+        if length is None:
+            params.pop(1)
+            sc_select = "SELECT substr({}, ?), {} FROM {} ".format(
+                self.COL_CONTENT, self.COL_Q, self.TABLE_A
+            )
+        else:
+            sc_select = "SELECT substr({}, ?, ?), {} FROM {} ".format(
+                self.COL_CONTENT, self.COL_Q, self.TABLE_A
+            )
         sc_where = self._slr_a_where_clause(
             with_rels=kwargs.get('with_rels', False),
             is_alias=kwargs.get('is_alias', False),
-            wildcards=kwargs.get('wildcards', True)
+            wildcards=kwargs.get('wildcards', True),
+            preface=kwargs.get('preface', True)
         )
         sc = "".join((sc_select, sc_where))
         if kwargs:
@@ -1013,8 +1027,9 @@ class SQLiteRepo:
         return {'_sql_rowid': self._slr_get_last_insert_rowid()}
 
     def _slr_a_where_clause(
-            self, with_rels=False, is_alias=False, wildcards=True
+            self, with_rels=False, is_alias=False, wildcards=True, preface=True
         ):
+        # TODO: rename _limit_content_len to _limit_preface?
         """
         Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
         operations on anchors and relations.
@@ -1031,16 +1046,20 @@ class SQLiteRepo:
           literally
 
         """
-
         out = "WHERE "
         if is_alias:
             out = "".join((out, "ROWID = ? "))
         else:
-            if wildcards:
-                out = "".join((out, "{} LIKE ? ESCAPE '{}' ".format(
-                    self.COL_CONTENT, self.CHAR_ESCAPE)))
+            if preface:
+                out = "".join((out, self._subclause_preface))
             else:
-                out = "".join((out, "{} = ? ".format(self.COL_CONTENT)))
+                out = "".join((out, "{} ".format(self.COL_CONTENT)))
+            if wildcards:
+                out = "".join((
+                    out, "LIKE ? ESCAPE '{}' ".format( self.CHAR_ESCAPE)
+                ))
+            else:
+                out = "".join((out, "= ? ".format(self.COL_CONTENT)))
         if not with_rels:
             out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
                         self.COL_CONTENT, self._char_rel)))
@@ -1211,6 +1230,7 @@ class SQLiteRepo:
           future releases.
 
         """
+        # TODO: supported kwargs: get_len, wildcards, preface
         wildcards = kwargs.get('wildcards', self._has_wildcards(a))
         is_alias = a.startswith(self._char_alias)
         if is_alias: term = self._prep_a_nx(a)
@@ -1387,8 +1407,15 @@ class SQLiteRepo:
             kwargs.get('a_from', '*'),
             kwargs.get('a_to', '*')
         )
+        # TODO: find a more elegant way to prevent incorrect length
+        # and preface settings from reaching _slr_get_a()
+        kwargs['length'] = None
+        kwargs['preface'] = False
         rels = self._slr_get_a(
-            term, with_rels=True, wildcards=self._has_wildcards(term), **kwargs
+            term,
+            with_rels=True,
+            wildcards=self._has_wildcards(term),
+            **kwargs
         )
         return (r[0].split(self._char_rel)+[r[1],] for r in rels)
 

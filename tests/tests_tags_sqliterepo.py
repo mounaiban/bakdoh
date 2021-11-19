@@ -373,6 +373,31 @@ class SLRGetATests(TestCase):
         samp = next(testdb.get_a('@1', out_format='interchange'))
         self.assertEqual(samp, expected)
 
+    def test_get_a_long_content(self):
+        """Get Anchors with long-form content
+
+        The preface of the content must be able to retrieve the Anchor
+
+        """
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        contents = [
+            "{}{}".format(x, "N" * testrepo._limit_content_len) for x in range(3)
+        ]
+        init = [(x, 99) for x in contents]
+        testdb.import_data(init)
+        for c in contents:
+            samp_preface = next(testdb.get_a(c[:-1], out_format='interchange'))
+            expected_preface = (c[:-1], 99)
+            samp_full = next(
+                testdb.get_a(c[:-1], length=None, out_format='interchange')
+            )
+            expected_full = (c, 99)
+            self.assertEqual(samp_preface, expected_preface)
+            self.assertEqual(samp_full, expected_full)
+            # NOTE: The the full contents cannot be used to access
+            # the anchor, the preface must be used instead
+
     def test_get_a_exact_sql_wildcard_escape(self):
         """Get single anchor containing SQL wildcard characters"""
         testdb = DB(SQLiteRepo())
@@ -447,6 +472,57 @@ class SLRGetATests(TestCase):
 
 class SLRPutATests(TestCase):
     """Tests for put_a()"""
+
+    def test_put_a_long_content(self):
+        """Put anchors with long-form content"""
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        contents = [
+            "{}{}".format(x, "N" * testrepo._limit_content_len) for x in range(3)
+        ]
+        data = [(x, None) for x in contents]
+        for d in data:
+            testdb.put_a(*d)
+        samp = list(testdb.export())
+        self.assertEqual(samp, data)
+
+    def test_put_a_long_content_same_preface(self):
+        """Put anchors with long-form content with the same preface
+
+        The preface of a long-form anchor identifies the anchor
+        and cannot be reused.
+
+        """
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        contents = [
+            "{}{}".format("N" * testrepo._limit_content_len, x) for x in range(3)
+        ]
+        data = [(x, None) for x in contents]
+        with self.assertRaises(ValueError):
+            for d in data:
+                testdb.put_a(*d)
+        samp = list(testdb.export())
+        self.assertEqual(samp, data[:1])
+
+    def test_put_a_long_content_conflicting_preface(self):
+        """Put long-form anchor in presence of conflicting anchor
+
+        The preface of a long-form anchor identifies the anchor
+        and cannot be identical to an existing anchor. Existing
+        anchors must remain intact.
+
+        """
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        preface = "N" * testrepo._limit_content_len
+        init = [("{}".format(preface), None),] # anchor equiv. to preface
+        data = ("".join((preface, "X")), None) # regular long-form anchor
+        testdb.import_data(init)
+        with self.assertRaises(ValueError):
+            testdb.put_a(*data)
+        samp = list(testdb.export())
+        self.assertEqual(samp, init)
 
     def test_put_a_special_chars(self):
         """Put anchor containing special reserved characters"""
@@ -545,6 +621,28 @@ class SLRGetRelsTests(TestCase):
 
 class SLRSetQTests(TestCase):
     """Tests for setting q-values"""
+
+    def test_set_a_q_long_content(self):
+        """Set Anchor q-value with long-form content
+
+        The preface of the content must be able to set the Anchor's q-value
+
+        """
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        suffix = "N" * testrepo._limit_content_len
+        init = [
+            ("{}{}".format("Z", suffix), 0),
+            ('Z', 0),
+        ]
+        expected = [
+            ("{}{}".format("Z", suffix), 99),
+            ('Z', 0),
+        ]
+        testdb.import_data(init)
+        testdb.set_a_q("{}{}".format("Z", suffix[:-1]), 99)
+        samp = list(testdb.export())
+        self.assertEqual(samp, expected)
 
     def test_set_a_q_special_chars_wc(self):
         testdb = DB(SQLiteRepo())
