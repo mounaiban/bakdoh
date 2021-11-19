@@ -382,7 +382,7 @@ class SLRGetATests(TestCase):
         testrepo = SQLiteRepo()
         testdb = DB(testrepo)
         contents = [
-            "{}{}".format(x, "N" * testrepo._limit_content_len) for x in range(3)
+            "{}{}".format(x, "N" * testrepo.preface_length) for x in range(3)
         ]
         init = [(x, 99) for x in contents]
         testdb.import_data(init)
@@ -478,7 +478,7 @@ class SLRPutATests(TestCase):
         testrepo = SQLiteRepo()
         testdb = DB(testrepo)
         contents = [
-            "{}{}".format(x, "N" * testrepo._limit_content_len) for x in range(3)
+            "{}{}".format(x, "N" * testrepo.preface_length) for x in range(3)
         ]
         data = [(x, None) for x in contents]
         for d in data:
@@ -496,7 +496,7 @@ class SLRPutATests(TestCase):
         testrepo = SQLiteRepo()
         testdb = DB(testrepo)
         contents = [
-            "{}{}".format("N" * testrepo._limit_content_len, x) for x in range(3)
+            "{}{}".format("N" * testrepo.preface_length, x) for x in range(3)
         ]
         data = [(x, None) for x in contents]
         with self.assertRaises(ValueError):
@@ -515,7 +515,7 @@ class SLRPutATests(TestCase):
         """
         testrepo = SQLiteRepo()
         testdb = DB(testrepo)
-        preface = "N" * testrepo._limit_content_len
+        preface = "N" * testrepo.preface_length
         init = [("{}".format(preface), None),] # anchor equiv. to preface
         data = ("".join((preface, "X")), None) # regular long-form anchor
         testdb.import_data(init)
@@ -630,7 +630,7 @@ class SLRSetQTests(TestCase):
         """
         testrepo = SQLiteRepo()
         testdb = DB(testrepo)
-        suffix = "N" * testrepo._limit_content_len
+        suffix = "N" * testrepo.preface_length
         init = [
             ("{}{}".format("Z", suffix), 0),
             ('Z', 0),

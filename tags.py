@@ -666,8 +666,8 @@ class SQLiteRepo:
     COL_CONTENT = "content"
     COL_Q = "q"
     LIMITS_DEFAULT = {
-        'LIMIT_RESULTS': 32,
-        'LIMIT_CONTENT_LEN': 128
+        'PREFACE_LENGTH': 128,
+        'MAX_RESULTS': 32,
     }
     TABLE_A = "a"
     TABLE_CONFIG = "config"
@@ -719,15 +719,15 @@ class SQLiteRepo:
         self.special_chars = {
             "E": self.CHAR_ESCAPE, "F": "", "PX": "", "WC": self.CHARS_WC
         }
+        self.db_path = db_path
+        self.preface_length = None
         self.uri = "file:{}?mode={}".format(db_path, mode)
         self._char_al = None
         self._char_rel = None
         self._chars_px = ""
         self._db_conn = sqlite3.connect(self.uri, uri=True)
         self._db_cus = None
-        self._db_path = db_path
-        self._limit_content_len = None
-        self._limit_results = None
+        self._max_results = None
         self._trans_f = {}
         self._trans_px = {}
         self._subclause_preface = None
@@ -741,7 +741,7 @@ class SQLiteRepo:
                 self._slr_dict_to_config(self.LIMITS_DEFAULT)
         # Setup: set config from SQLite file
         config_chars = self._slr_config_to_dict('CHAR_%')
-        config_limits = self._slr_config_to_dict('LIMIT_%')
+        config_limits = self._slr_config_to_dict('MAX_%')
         for k in config_chars:
             if k.startswith('CHAR_F'):
                 c = config_chars[k]
@@ -752,12 +752,12 @@ class SQLiteRepo:
                 self._chars_px = "".join((self._chars_px, c))
                 self._trans_px[ord(c)] = escape(c)
                 self.special_chars['PX'] = self._chars_px
+        self.preface_length = self._slr_config_to_dict('PRE%')['PREFACE_LENGTH']
         self._char_alias = config_chars['CHAR_PX_AL_SQL']
         self._char_rel = config_chars['CHAR_F_REL_SQL']
-        self._limit_content_len = config_limits['LIMIT_CONTENT_LEN']
-        self._limit_results = config_limits['LIMIT_RESULTS']
+        self._max_results = config_limits['MAX_RESULTS']
         self._subclause_preface = "substr({}, 1, {})".format(
-            self.COL_CONTENT, self._limit_content_len
+            self.COL_CONTENT, self.preface_length
         )
 
     def __repr__(self):
@@ -847,7 +847,7 @@ class SQLiteRepo:
             self.TABLE_A
         )
         sc_ck = "SELECT COUNT(*) FROM {} WHERE substr({}, 1, {}) = ?".format(
-            self.TABLE_A, self.COL_CONTENT, self._limit_content_len
+            self.TABLE_A, self.COL_CONTENT, self.preface_length
         )
         for a in anchors:
             term = None
@@ -856,7 +856,7 @@ class SQLiteRepo:
                 term = int(a[1:])
             else:
                 sc = sc_ck
-                term = a[:self._limit_content_len]
+                term = a[:self.preface_length]
             cs = self._slr_get_shared_cursor()
             r = next(cs.execute(sc, (term,)))
             if r[0] <= 0:
@@ -941,7 +941,7 @@ class SQLiteRepo:
 
         """
         start = kwargs.get('start', 1)
-        length = kwargs.get('length', self._limit_content_len)
+        length = kwargs.get('length', self.preface_length)
         params = [start, length, ae]
         sc_select = ""
         if length is None:
@@ -1029,7 +1029,6 @@ class SQLiteRepo:
     def _slr_a_where_clause(
             self, with_rels=False, is_alias=False, wildcards=True, preface=True
         ):
-        # TODO: rename _limit_content_len to _limit_preface?
         """
         Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
         operations on anchors and relations.
@@ -1250,7 +1249,7 @@ class SQLiteRepo:
         """
         ck = self._slr_ck_anchors_exist((a,))
         if ck[0]:
-            apre = a[:self._limit_content_len]
+            apre = a[:self.preface_length]
             raise ValueError('anchor starting with {} exists'.format(apre))
         return self._slr_insert_into_a(self._prep_a_nx(a, wildcards=False), q)
 
