@@ -523,6 +523,12 @@ class DB:
         """
         return self.repo.special_chars
 
+    def get_stats(self):
+        return {
+            'preface_length': self.repo.preface_length,
+            'db_path': self.repo.db_path,
+        }
+
     def import_data(self, data):
         """
         Imports anchors and relations into the database from a
