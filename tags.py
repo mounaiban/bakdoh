@@ -33,17 +33,20 @@ def escape(c):
     """Convert a character to an escape sequence according to spec"""
     return "&#{};".format(ord(c)) # currently: decimal-coded HTML entities
 
-def escape_dict(chars):
+def escape_dict(chars, maketrans=False):
     """
     Create a translation dict from the string of characters "chars"
-    which replaces instances of said characters with HTML Entitites
-    (ampersand-code-semicolon escape sequences).
+    which replaces instances of said characters with decimal HTML
+    Entitites (ampersand-code-semicolon escape sequences).
+
+    When ``maketrans`` is set to True, the returned dict is formatted
+    for use with str.translate(). Such dict's may not be readable to
+    untrained humans.
 
     """
-    out = {}
-    for v in d.values():
-        out[ord(v)] = escape(v)
-    return out
+    if maketrans: f = ord
+    else: f = lambda x:x
+    return dict(zip((f(v) for v in chars), (escape(v) for v in chars)))
 
 class Anchor:
     # Anchor (graph node) class. Includes navigation methods.
