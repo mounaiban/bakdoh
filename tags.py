@@ -723,7 +723,7 @@ class SQLiteRepo:
         """
         # TODO: Allow user to set database-local special characters
         if db_path is None:
-            db_path = "test.sqlite3"
+            db_path = ":memory:"
             mode = 'memory'
         self.special_chars = {
             "E": self.CHAR_ESCAPE, "F": "", "PX": "", "WC": self.CHARS_WC
@@ -771,7 +771,7 @@ class SQLiteRepo:
 
     def __repr__(self):
         return "{}({}, uri={})".format(
-            self.__class__.__name__, self._db_path, self.uri
+            self.__class__.__name__, self.db_path, self.uri
         )
 
     def _index_prefix(self, s, px_list):
