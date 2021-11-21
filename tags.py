@@ -533,6 +533,7 @@ class DB:
         return {
             'preface_length': self.repo.preface_length,
             'db_path': self.repo.db_path,
+            'writable': self.repo.writable,
         }
 
     def import_data(self, data):
@@ -734,6 +735,7 @@ class SQLiteRepo:
         self.db_path = db_path
         self.preface_length = None
         self.uri = "file:{}?mode={}".format(db_path, mode)
+        self.writable = (mode == 'memory') or ('w' in mode)
         self._char_al = None
         self._char_rel = None
         self._chars_px = ""
