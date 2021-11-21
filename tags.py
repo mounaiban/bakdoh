@@ -52,7 +52,10 @@ class Anchor:
     # Anchor (graph node) class. Includes navigation methods.
     def __init__(self, content, q=None, **kwargs):
         # kwargs accepted: db, do_sync
-        self.db = kwargs.get('db')
+        db = kwargs.get('db')
+        if type(db) is not DB:
+            raise TypeError("cannot use non-TAGS database as db")
+        self.db = db
         self.content = content
         self.q = q
         do_sync = kwargs.get('do_sync', True)
