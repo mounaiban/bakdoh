@@ -53,7 +53,7 @@ class Anchor:
     def __init__(self, content, q=None, **kwargs):
         # kwargs accepted: db, init_sync
         db = kwargs.get('db')
-        if type(db) is not DB:
+        if db is not None and type(db) is not DB:
             raise TypeError("cannot use non-TAGS database as db")
         self.db = db
         self.content = content
