@@ -75,7 +75,10 @@ class Anchor:
         )
 
     def _ck_db_writable(self):
-        if not self.db.auto_put: raise RuntimeError('db auto_put not set')
+        if not self.db.allow_put_self:
+            raise RuntimeError('db allow_put_self not set')
+        if not self.db.repo.writable:
+            raise RuntimeError('db is not writable')
 
     def reload(self):
         """Refresh the q value of the anchor from the database
@@ -99,15 +102,11 @@ class Anchor:
 
     def link(self, name, a_to, q):
         # Create a relation from this anchor.
-        # To prevent accidental placement, auto_put must be
-        # set to True on the Anchor's connected DB
         self._ck_db_writable()
         self.db.put_rel(name, self.content, a_to, q)
 
     def unlink(self, name, a_to):
         # Remove relations from this anchor. Wildcards are supported
-        # To prevent accidental deletion, auto_put must be
-        # set to True on the Anchor's connected DB
         self._ck_db_writable()
         self.db.delete_rels(name=name, a_from=self.content, a_to=a_to)
 
@@ -197,14 +196,14 @@ class DB:
 
         Keyword Arguments
         =================
-        * auto_put : When set to True, this allows linked Anchors to
+        * allow_put_self : When set to True, this allows linked Anchors to
           automatically request themselves to be saved to the database
           if they are not found in the database, or when the q-value
           is updated.
 
         """
         self.repo = repo
-        self.auto_put = kwargs.get('auto_put', False)
+        self.allow_put_self = kwargs.get('allow_put_self', False)
 
     def __repr__(self):
         return "{}(repo={})".format(self.__class__.__name__, self.repo)
