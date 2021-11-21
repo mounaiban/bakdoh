@@ -728,18 +728,18 @@ class SQLiteRepo:
             "E": self.CHAR_ESCAPE, "F": "", "PX": "", "WC": self.CHARS_WC
         }
         self.db_path = db_path
-        self.preface_length = None
+        self.preface_length: int
         self.uri = "file:{}?mode={}".format(db_path, mode)
         self.writable = (mode == 'memory') or ('w' in mode)
-        self._char_al = None
-        self._char_rel = None
+        self._char_al: str[1]
+        self._char_rel: str[1]
         self._chars_px = ""
         self._db_conn = sqlite3.connect(self.uri, uri=True)
-        self._db_cus = None
-        self._max_results = None
+        self._db_cus = self._db_conn.cursor()
+        self._max_results: int
         self._trans_f = {}
         self._trans_px = {}
-        self._subclause_preface = None
+        self._subclause_preface: int
         # Setup: detect and create SQLite tables
         try:
             self._slr_ck_tables()
@@ -859,7 +859,7 @@ class SQLiteRepo:
             self.TABLE_A, self.COL_CONTENT, self.preface_length
         )
         for a in anchors:
-            term = None
+            term: str
             if a.startswith(self._char_rel):
                 sc = sc_ck_alias
                 term = int(a[1:])
