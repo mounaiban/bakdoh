@@ -59,7 +59,7 @@ class Anchor:
         self.content = content
         self.q = q
         init_sync = kwargs.get('init_sync', True)
-        if self.db and self.db.auto_get and init_sync: self.reload()
+        if self.db and init_sync: self.reload()
 
     def __eq__(self, other):
         """Anchor comparison: two Anchors are of equal value when
@@ -202,13 +202,9 @@ class DB:
           if they are not found in the database, or when the q-value
           is updated.
 
-        * auto_get : When set to True, this allows linked Anchors to
-          fetch the q-value when they are created.
-
         """
         self.repo = repo
         self.auto_put = kwargs.get('auto_put', False)
-        self.auto_get = kwargs.get('auto_get', True)
 
     def __repr__(self):
         return "{}(repo={})".format(self.__class__.__name__, self.repo)
