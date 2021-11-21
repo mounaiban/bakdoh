@@ -74,6 +74,9 @@ class Anchor:
             self.__class__.__name__, self.content, self.q
         )
 
+    def _ck_db_writable(self):
+        if not self.db.auto_put: raise RuntimeError('db auto_put not set')
+
     def reload(self):
         """Refresh the q value of the anchor from the database
         and return the q value
@@ -98,19 +101,15 @@ class Anchor:
         # Create a relation from this anchor.
         # To prevent accidental placement, auto_put must be
         # set to True on the Anchor's connected DB
-        if type(self.db) is DB:
-            if not self.db.auto_put:
-                raise RuntimeError('auto_put not enabled in DB')
-            self.db.put_rel(name, self.content, a_to, q)
+        self._ck_db_writable()
+        self.db.put_rel(name, self.content, a_to, q)
 
     def unlink(self, name, a_to):
         # Remove relations from this anchor. Wildcards are supported
         # To prevent accidental deletion, auto_put must be
         # set to True on the Anchor's connected DB
-        if type(self.db) is DB:
-            if not self.db.auto_put:
-                raise RuntimeError('auto_put not enabled in DB')
-            self.db.delete_rels(name=name, a_from=self.content, a_to=a_to)
+        self._ck_db_writable()
+        self.db.delete_rels(name=name, a_from=self.content, a_to=a_to)
 
     def put_self(self):
         """Writes the Anchor to the connected database, if present.
@@ -119,6 +118,7 @@ class Anchor:
         update the q-value instead.
 
         """
+        self._ck_db_writable()
         try:
             detect = next(self.db.repo.get_a(self.content, wildcards=False))
             if not detect:
