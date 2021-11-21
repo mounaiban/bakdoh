@@ -51,15 +51,15 @@ def escape_dict(chars, maketrans=False):
 class Anchor:
     # Anchor (graph node) class. Includes navigation methods.
     def __init__(self, content, q=None, **kwargs):
-        # kwargs accepted: db, do_sync
+        # kwargs accepted: db, init_sync
         db = kwargs.get('db')
         if type(db) is not DB:
             raise TypeError("cannot use non-TAGS database as db")
         self.db = db
         self.content = content
         self.q = q
-        do_sync = kwargs.get('do_sync', True)
-        if self.db and self.db.auto_get and do_sync: self.reload()
+        init_sync = kwargs.get('init_sync', True)
+        if self.db and self.db.auto_get and init_sync: self.reload()
 
     def __eq__(self, other):
         """Anchor comparison: two Anchors are of equal value when
@@ -405,7 +405,7 @@ class DB:
             return (rout[0], rout[1])
 
         def format_obj(rout):
-            return Anchor(rout[0], rout[1], db=self, do_sync=False)
+            return Anchor(rout[0], rout[1], db=self, init_sync=False)
 
         def format_conly(rout):
             # content only
