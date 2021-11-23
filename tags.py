@@ -961,6 +961,7 @@ class SQLiteRepo:
         """
         start = kwargs.get('start', 1)
         length = kwargs.get('length', self.preface_length)
+        wildcards = kwargs.get('wildcards', True)
         params = [start, length, ae]
         sc_select = ""
         if length is None:
@@ -975,8 +976,8 @@ class SQLiteRepo:
         sc_where = self._slr_a_where_clause(
             with_rels=kwargs.get('with_rels', False),
             is_alias=kwargs.get('is_alias', False),
-            wildcards=kwargs.get('wildcards', True),
-            preface=kwargs.get('preface', True)
+            wildcards=wildcards,
+            preface=(len(ae) <= self.preface_length) and not wildcards
         )
         sc = "".join((sc_select, sc_where))
         if kwargs:
@@ -1429,7 +1430,6 @@ class SQLiteRepo:
         # TODO: find a more elegant way to prevent incorrect length
         # and preface settings from reaching _slr_get_a()
         kwargs['length'] = None
-        kwargs['preface'] = False
         rels = self._slr_get_a(
             term,
             with_rels=True,
