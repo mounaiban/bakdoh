@@ -1026,6 +1026,7 @@ class SQLiteRepo:
         cs = self._slr_get_shared_cursor()
         for k in confdict:
             cs.execute(sc, (k, confdict[k]))
+        self._db_conn.commit()
 
     def _slr_insert_into_a(self, item, q):
         """
