@@ -20,6 +20,7 @@ import sqlite3
 from json import JSONEncoder
 from html import unescape
 from itertools import chain
+from warnings import warn
 
 # Reserved symbols used as TAGS wildcards (same as Unix glob)
 CHAR_WC_1C = "\u003f" # single char only: Question Mark
@@ -739,15 +740,19 @@ class SQLiteRepo:
         self._max_results: int
         self._trans_f = {}
         self._trans_px = {}
-        self._subclause_preface: int
+        self._subclause_preface: str
         # Setup: detect and create SQLite tables
         try:
             self._slr_ck_tables()
         except sqlite3.OperationalError as x:
             if 'no such table' in x.args[0]:
+                limits_temp = self.LIMITS_DEFAULT.copy()
+                limits_temp['PREFACE_LENGTH'] = kwargs.pop(
+                    'preface_length', self.LIMITS_DEFAULT['PREFACE_LENGTH']
+                )
                 self._slr_create_tables()
                 self._slr_dict_to_config(self.CHARS_DB_DEFAULT)
-                self._slr_dict_to_config(self.LIMITS_DEFAULT)
+                self._slr_dict_to_config(limits_temp)
         # Setup: set config from SQLite file
         config_chars = self._slr_config_to_dict('CHAR_%')
         config_limits = self._slr_config_to_dict('MAX_%')
@@ -762,6 +767,11 @@ class SQLiteRepo:
                 self._trans_px[ord(c)] = escape(c)
                 self.special_chars['PX'] = self._chars_px
         self.preface_length = self._slr_config_to_dict('PRE%')['PREFACE_LENGTH']
+        if 'preface_length' in kwargs:
+            warn(
+                'preface_length set to {} by DB'.format(self.preface_length),
+                RuntimeWarning
+            )
         self._char_alias = config_chars['CHAR_PX_AL_SQL']
         self._char_rel = config_chars['CHAR_F_REL_SQL']
         self._max_results = config_limits['MAX_RESULTS']
