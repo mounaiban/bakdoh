@@ -920,12 +920,15 @@ class SQLiteRepo:
 
     def _slr_set_q(self, ae, q, with_rels=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
-        if kwargs.get('wildcards') is None:
-            kwargs['wildcards'] = self._has_wildcards(ae)
+        wildcards: bool
+        if 'wildcards' not in kwargs:
+            wildcards = self._has_wildcards(ae)
+            kwargs['wildcards'] = wildcards
+        else: wildcards = kwargs.get('wildcards')
         sc_set = "UPDATE {} SET {} = ? ".format(self.TABLE_A, self.COL_Q)
         sc = "".join((sc_set, self._slr_a_where_clause(
-            with_rels=with_rels, wildcards=kwargs.get('wildcards', True)
-        )))
+                with_rels=with_rels, wildcards=wildcards
+            )))
         params = [q, ae]
         if kwargs:
             sc_q, qparams = self._slr_q_clause(**kwargs)
@@ -936,7 +939,7 @@ class SQLiteRepo:
         self._db_conn.commit()
 
     def _slr_incr_q(self, ae, d, with_rels=False, **kwargs):
-        if kwargs.get('wildcards') is None:
+        if 'wildcards' not in kwargs:
             kwargs['wildcards'] = self._has_wildcards(ae)
         sc_incr = "UPDATE {0} SET {1}={1}+? ".format(self.TABLE_A, self.COL_Q)
         sc = "".join((sc_incr, self._slr_a_where_clause(with_rels=with_rels)))
@@ -1251,7 +1254,11 @@ class SQLiteRepo:
 
         """
         # TODO: supported kwargs: get_len, wildcards, preface
-        wildcards = kwargs.get('wildcards', self._has_wildcards(a))
+        wildcards: bool
+        if 'wildcards' not in kwargs:
+            wildcards = self._has_wildcards(a)
+            kwargs['wildcards'] = wildcards
+        else: wildcards = kwargs.get('wildcards')
         is_alias = a.startswith(self._char_alias)
         if is_alias: term = self._prep_a_nx(a)
         elif wildcards: term = self._prep_a_nx(a, wildcards=wildcards)
@@ -1299,11 +1306,11 @@ class SQLiteRepo:
         if a == CHAR_WC_ZP:
             raise ValueError("cowardly refusing to delete all anchors")
         term = self._prep_a_nx(a)
-        has_wc = self._has_wildcards(term)
-        if kwargs.get('wildcards') is None:
-            kwargs['wildcards'] = has_wc
+        wildcards = self._has_wildcards(term)
+        if 'wildcards' not in kwargs:
+            kwargs['wildcards'] = wildcards
         sc_delete = "DELETE FROM {} ".format(self.TABLE_A)
-        sc_where = self._slr_a_where_clause(wildcards=has_wc)
+        sc_where = self._slr_a_where_clause(wildcards=wildcards)
         sc = "".join((sc_delete, sc_where))
         cs = self._slr_get_shared_cursor()
         cs.execute(sc, (term,))
@@ -1382,11 +1389,13 @@ class SQLiteRepo:
         if a_to == CHAR_WC_ZP and a_from == CHAR_WC_ZP:
             raise ValueError("at least one of a_to or a_from must not be '*'")
         term = self._reltext(name, a_from, a_to)
-        has_wc = self._has_wildcards(term)
-        if kwargs.get('wildcards') is None:
-            kwargs['wildcards'] = has_wc
+        wildcards: bool
+        if 'wildcards' not in kwargs:
+            wildcards = self._has_wildcards(term)
+            kwargs['wildcards'] = wildcards
+        else: wildcards = kwargs.get('wildcards')
         sc_delete = "DELETE FROM {} ".format(self.TABLE_A)
-        sc_where = self._slr_a_where_clause(with_rels=True, wildcards=has_wc)
+        sc_where = self._slr_a_where_clause(with_rels=True, wildcards=wildcards)
         sc = "".join((sc_delete, sc_where))
         cs = self._db_conn.cursor()
         cs.execute(sc, (term,))
