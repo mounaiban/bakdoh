@@ -892,6 +892,7 @@ class SQLiteRepo:
         cs = self._slr_get_shared_cursor()
         cs.execute(sc_table_a)
         cs.execute(sc_table_c)
+        self._db_conn.commit()
 
     def _slr_set_q(self, ae, q, with_rels=False, **kwargs):
         # PROTIP: also works with relations; relations are special anchors
