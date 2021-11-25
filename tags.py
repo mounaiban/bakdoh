@@ -862,24 +862,17 @@ class SQLiteRepo:
         as an anchor. All anchors will be checked.
 
         """
-        sc_ck_alias = "SELECT COUNT(*) FROM {} WHERE ROWID = ?".format(
-            self.TABLE_A
-        )
-        sc_ck = "SELECT COUNT(*) FROM {} WHERE substr({}, 1, {}) = ?".format(
+        sc_ck = "SELECT NULL FROM {} WHERE substr({}, 1, {}) = ?".format(
             self.TABLE_A, self.COL_CONTENT, self.preface_length
         )
-        for a in anchors:
-            term: str
-            if a.startswith(self._char_rel):
-                sc = sc_ck_alias
-                term = int(a[1:])
-            else:
-                sc = sc_ck
+        cs = self._db_conn.cursor()
+        term: str
+        try:
+            for a in anchors:
                 term = a[:self.preface_length]
-            cs = self._slr_get_shared_cursor()
-            r = next(cs.execute(sc, (term,)))
-            if r[0] <= 0:
-                return (False, term)
+                r = next(cs.execute(sc_ck, (term,)))
+        except StopIteration:
+            return (False, term)
         return (True, None)
 
     def _slr_ck_tables(self):
