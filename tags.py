@@ -1173,6 +1173,37 @@ class SQLiteRepo:
         else:
             return (clause, params)
 
+    def _slr_lookup_alias(self, alias, **kwargs):
+        """Return an Anchor by an alias
+
+        Aliases are 'virtual anchors' that reference other anchors
+        or relations, and are prefixed by an at "@" symbol (U+0040).
+
+        The SQLite Repository supports integer and alphanumeric
+        aliases.
+
+        Integer aliases like "@9001" return anchors or relations
+        based on their assigned SQL ROWID.
+
+        Aliases are an experimental feature which may be removed or
+        replaced by another incompatible feature.
+
+        """
+        sc_lu: str
+        if type(alias) is int:
+            sc_lu = "SELECT {}, {} FROM {} WHERE ROWID = ?".format(
+                self.COL_CONTENT, self.COL_Q, self.TABLE_A
+            )
+        else:
+            sc_lu = """
+                SELECT {0}, {1} FROM {2} WHERE {1} LIKE ?
+                ORDER BY ROWID DESC
+                LIMIT 1
+                """.format(self.COL_CONTENT, self.COL_Q, self.TABLE_A)
+            alias = self._reltext(name=self._char_alias, a_from=alias)
+        cs = kwargs.get('cursor', self._db_conn.cursor())
+        return cs.execute(sc_lu, (alias,))
+
     def _has_wildcards(self, a):
         return True in map(lambda x: x in a, self.CHARS_WC)
 
