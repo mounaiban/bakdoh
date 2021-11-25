@@ -797,25 +797,7 @@ class SQLiteRepo:
             if s.startswith(p): return (len(p))
         return 0
 
-    def _prep_term(self, term):
-        """
-        Reformat a string for use with lookups in the repository.
-        This includes escaping special characters as necessary,
-        converting TAGS wildcards to SQL wildcards, or diverting
-        to an alias lookup instead.
-
-        """
-        return self._prep_a_nx(term, wildcards=True)
-
-    def _prep_a(self, a):
-        """
-        Prepare text for insertion into the DB, for use as anchor
-        content or relation names.
-
-        """
-        return self._prep_a_nx(a, wildcards=False)
-
-    def _prep_a_nx(self, a, **kwargs):
+    def _prep_a(self, a, **kwargs):
         """
         Prepare text for insertion into the DB, or for lookup
         (SQL SELECT) queries.
@@ -996,7 +978,7 @@ class SQLiteRepo:
             self.COL_CONTENT, self.TABLE_A
         )
         sc = "".join((sc_rowid, self._slr_a_where_clause(),))
-        term = self._prep_term(a)
+        term = self._prep_a(a, wildcards=True)
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, (term,))
 
@@ -1207,11 +1189,11 @@ class SQLiteRepo:
         # NeXt-generation Version
         # supported kwargs: wildcards
         return '{}{}{}{}{}'.format(
-            self._prep_a_nx(name, **kwargs),
+            self._prep_a(name, **kwargs),
             self._char_rel,
-            self._prep_a_nx(a_from, **kwargs),
+            self._prep_a(a_from, **kwargs),
             self._char_rel,
-            self._prep_a_nx(a_to, **kwargs),
+            self._prep_a(a_to, **kwargs),
         )
 
     def _reltext_alias_rowid(self, name, a_from, a_to, out_format=3):
@@ -1239,9 +1221,9 @@ class SQLiteRepo:
                       undefined.
 
         """
-        n = self._prep_a_nx(name, wildcards=False)
-        af = self._prep_a_nx(a_from, wildcards=False)
-        at = self._prep_a_nx(a_to, wildcards=False)
+        n = self._prep_a(name, wildcards=False)
+        af = self._prep_a(a_from, wildcards=False)
+        at = self._prep_a(a_to, wildcards=False)
         try:
             if out_format & 1:
                 at = "{}{}".format(
@@ -1272,13 +1254,13 @@ class SQLiteRepo:
         """
         # TODO: supported kwargs: start, length, wildcards, preface
         if a.startswith(self._char_alias):
-            return self._slr_lookup_alias(self._prep_a_nx(a))
+            return self._slr_lookup_alias(self._prep_a(a))
         if 'wildcards' not in kwargs:
             wildcards = self._has_wildcards(a)
             kwargs['wildcards'] = wildcards
         else: wildcards = kwargs.get('wildcards')
         return self._slr_get_a(
-            self._prep_a_nx(a, wildcards=wildcards),
+            self._prep_a(a, wildcards=wildcards),
             with_rels=False,
             **kwargs
         )
@@ -1292,14 +1274,14 @@ class SQLiteRepo:
         if ck[0]:
             apre = a[:self.preface_length]
             raise ValueError('anchor starting with {} exists'.format(apre))
-        return self._slr_insert_into_a(self._prep_a_nx(a, wildcards=False), q)
+        return self._slr_insert_into_a(self._prep_a(a, wildcards=False), q)
 
     def set_a_q(self, a, q, **kwargs):
         """Handle DB request to assign a numerical quantity to an
         anchor. Called from DB.set_a_q()
 
         """
-        term = self._prep_a_nx(a, **kwargs)
+        term = self._prep_a(a, **kwargs)
         self._slr_set_q(term, q, **kwargs)
 
     def incr_a_q(self, a, d, **kwargs):
@@ -1307,7 +1289,7 @@ class SQLiteRepo:
         quantity of an anchor. Called from DB.incr_a_q()
 
         """
-        self._slr_incr_q(self._prep_a_nx(a), d, **kwargs)
+        self._slr_incr_q(self._prep_a(a), d, **kwargs)
 
     def delete_a(self, a, **kwargs):
         """Handle DB request to delete anchors. Accepts the same arguments
@@ -1318,7 +1300,7 @@ class SQLiteRepo:
         # TODO: Allow delete by quantity or quantity range?
         if a == CHAR_WC_ZP:
             raise ValueError("cowardly refusing to delete all anchors")
-        term = self._prep_a_nx(a)
+        term = self._prep_a(a)
         wildcards = self._has_wildcards(term)
         if 'wildcards' not in kwargs:
             kwargs['wildcards'] = wildcards

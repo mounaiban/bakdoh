@@ -297,28 +297,28 @@ class SlrPrepTermTests(TestCase):
         """Handle ROWID aliases"""
         val = 9001
         term = "{}{}".format(self.alias, val)
-        self.assertEqual(self.testrepo._prep_term(term), val)
+        self.assertEqual(self.testrepo._prep_a(term), val)
 
     def test_prep_term_wildcards(self):
         """Conversion of TAGS wildcards to SQL wildcards"""
         args_outs = (
-            {'args': {'term': '*ananas'}, 'out': '%ananas'},
-            {'args': {'term': 'ana*nas'}, 'out': 'ana%nas'},
-            {'args': {'term': 'ananas*'}, 'out': 'ananas%'},
-            {'args': {'term': 'a??na'}, 'out': 'a__na'},
+            {'args': {'a': '*ananas'}, 'out': '%ananas'},
+            {'args': {'a': 'ana*nas'}, 'out': 'ana%nas'},
+            {'args': {'a': 'ananas*'}, 'out': 'ananas%'},
+            {'args': {'a': 'a??na'}, 'out': 'a__na'},
             {
-                'args': {'term': '100%an_a'},
+                'args': {'a': '100%an_a'},
                 'out': '100{0}%an{0}_a'.format(self.escape)
             },
             {
-                'args': {'term': '100%an_a'},
+                'args': {'a': '100%an_a'},
                 'out': '100{0}%an{0}_a'.format(self.escape)
             },
         )
         for a in args_outs:
             with self.subTest(term=a['args']):
                 self.assertEqual(
-                    self.testrepo._prep_term(**a['args']), a['out']
+                    self.testrepo._prep_a(**a['args']), a['out']
                 )
 
 class SlrPrepATests(TestCase):
@@ -341,7 +341,9 @@ class SlrPrepATests(TestCase):
                 )) for x in self.chardict["F"])
         for term, expected in zip(ins, outs):
             with self.subTest(term=term):
-                self.assertEqual(self.testrepo._prep_a(term), expected)
+                self.assertEqual(
+                    self.testrepo._prep_a(term, wildcards=False), expected
+                )
 
     def test_prep_a_special_characters_prefix(self):
         """Handle prefix characters in relation names or anchor content.
@@ -357,7 +359,9 @@ class SlrPrepATests(TestCase):
         )
         for term, expected in zip(ins, outs):
             with self.subTest(term=term):
-                self.assertEqual(self.testrepo._prep_a(term), expected)
+                self.assertEqual(
+                    self.testrepo._prep_a(term, wildcards=False), expected
+                )
 
 class SLRGetATests(TestCase):
     """Tests for get_a()"""
