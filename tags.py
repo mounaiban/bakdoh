@@ -971,7 +971,6 @@ class SQLiteRepo:
             )
         sc_where = self._slr_a_where_clause(
             with_rels=kwargs.get('with_rels', False),
-            is_alias=kwargs.get('is_alias', False),
             wildcards=wildcards,
             preface=(len(ae) <= self.preface_length) and not wildcards
         )
@@ -1044,18 +1043,18 @@ class SQLiteRepo:
         return {'_sql_rowid': self._slr_get_last_insert_rowid()}
 
     def _slr_a_where_clause(
-            self, with_rels=False, is_alias=False, wildcards=True, preface=True
-        ):
+                self,
+                with_rels=False,
+                wildcards=True,
+                preface=True
+            ):
         """
-        Returns an SQL WHERE clause for SELECT, DELETE and UPDATE
-        operations on anchors and relations.
+        Returns an SQL WHERE clause for defining anchors or relations
+        on which to perform operations.
 
         Arguments
         =========
         * with_rels: when True, the clause includes relations.
-
-        * is_alias: when True, the clause selects anchors by SQLite
-          ROWID
 
         * wildcards: when True, the clause interprets wildcard characters
           as wildcards; when False, wildcard characters are interpreted
@@ -1063,19 +1062,16 @@ class SQLiteRepo:
 
         """
         out = "WHERE "
-        if is_alias:
-            out = "".join((out, "ROWID = ? "))
+        if preface:
+            out = "".join((out, self._subclause_preface))
         else:
-            if preface:
-                out = "".join((out, self._subclause_preface))
-            else:
-                out = "".join((out, "{} ".format(self.COL_CONTENT)))
-            if wildcards:
-                out = "".join((
-                    out, "LIKE ? ESCAPE '{}' ".format( self.CHAR_ESCAPE)
-                ))
-            else:
-                out = "".join((out, "= ? ".format(self.COL_CONTENT)))
+            out = "".join((out, "{} ".format(self.COL_CONTENT)))
+        if wildcards:
+            out = "".join((
+                out, "LIKE ? ESCAPE '{}' ".format( self.CHAR_ESCAPE)
+            ))
+        else:
+            out = "".join((out, "= ? ".format(self.COL_CONTENT)))
         if not with_rels:
             out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
                         self.COL_CONTENT, self._char_rel)))
@@ -1273,23 +1269,16 @@ class SQLiteRepo:
           For example, if the anchor 'durian' has a ROWID of 7, then '@7'
           returns 'durian'.
 
-          Aliases are an experimental feature which may be removed in
-          future releases.
-
         """
-        # TODO: supported kwargs: get_len, wildcards, preface
-        wildcards: bool
+        # TODO: supported kwargs: start, length, wildcards, preface
+        if a.startswith(self._char_alias):
+            return self._slr_lookup_alias(self._prep_a_nx(a))
         if 'wildcards' not in kwargs:
             wildcards = self._has_wildcards(a)
             kwargs['wildcards'] = wildcards
         else: wildcards = kwargs.get('wildcards')
-        is_alias = a.startswith(self._char_alias)
-        if is_alias: term = self._prep_a_nx(a)
-        elif wildcards: term = self._prep_a_nx(a, wildcards=wildcards)
-        else: term = self._prep_a_nx(a, wildcards=False)
         return self._slr_get_a(
-            term,
-            is_alias=is_alias,
+            self._prep_a_nx(a, wildcards=wildcards),
             with_rels=False,
             **kwargs
         )
