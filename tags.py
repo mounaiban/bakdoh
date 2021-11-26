@@ -938,6 +938,10 @@ class SQLiteRepo:
         (q_lt or q_lte), q_not
 
         """
+        warn(
+            'please execute scripts created by _slr_sql_script() instead',
+            DeprecationWarning
+        )
         start = kwargs.get('start', 1)
         length = kwargs.get('length', self.preface_length)
         wildcards = kwargs.get('wildcards', True)
@@ -1059,6 +1063,39 @@ class SQLiteRepo:
             out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
                         self.COL_CONTENT, self._char_rel)))
         return out
+
+    def _slr_sql_script(
+                self, prologue, preface, with_rels, wildcards, **kwargs
+            ):
+        # prologue is the first part of the SQL script,
+        # e.g.: SELECT count(*) FROM a, # UPDATE a SET content = ?, ...
+        #
+        # param order of finish script is like:
+        # [start,] [length,] search_term, *qparams...
+        #
+        # TODO: switch to named style in generated scripts
+        #
+        sc = "{} WHERE ".format(prologue, self.TABLE_A)
+        target: str
+        if preface and not wildcards:
+            target = self._subclause_preface
+        else:
+            target = self.COL_CONTENT
+        if not with_rels:
+            sc = "".join((sc, "{} NOT LIKE '%{}%' AND ".format(
+                            target, self._char_rel
+                        )))
+        if wildcards:
+            sc = "".join((sc, "{} LIKE ? ESCAPE '{}' ".format(
+                                target, self.CHAR_ESCAPE
+                            )))
+        else:
+            sc = "".join((sc, "{} = ? ".format(target)))
+        qparams = ()
+        if kwargs:
+            qc, qparams = self._slr_q_clause(**kwargs)
+            sc = "".join((sc, qc))
+        return (sc, qparams)
 
     def _slr_q_clause(self, **kwargs):
         """
@@ -1254,17 +1291,38 @@ class SQLiteRepo:
 
         """
         # TODO: supported kwargs: start, length, wildcards, preface
+        start = kwargs.get('start', 1)
+        length = kwargs.get('length', self.preface_length)
+        params_length: tuple
+        prologue: str
+        term: str
         if a.startswith(self._char_alias):
             return self._slr_lookup_alias(self._prep_a(a))
+        wildcards = kwargs.get('wildcards', self._has_wildcards(a))
         if 'wildcards' not in kwargs:
             wildcards = self._has_wildcards(a)
             kwargs['wildcards'] = wildcards
         else: wildcards = kwargs.get('wildcards')
-        return self._slr_get_a(
-            self._prep_a(a, wildcards=wildcards),
+        term = self._prep_a(a, wildcards=wildcards)
+        if length is None:
+            params_length = (start,)
+            prologue = "SELECT substr({}, ?), {} FROM {} ".format(
+                self.COL_CONTENT, self.COL_Q, self.TABLE_A
+            )
+        else:
+            params_length = (start, length)
+            prologue = "SELECT substr({}, ?, ?), {} FROM {} ".format(
+                self.COL_CONTENT, self.COL_Q, self.TABLE_A
+            )
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            preface=len(term) <= self.preface_length,
             with_rels=False,
             **kwargs
         )
+        params = [x for x in chain(params_length, (term,), params_q)]
+        cs = kwargs.get('cursor', self._db_conn.cursor())
+        return ((unescape(c), q) for c, q in cs.execute(sc, params))
 
     def put_a(self, a, q=None):
         """Handle DB request to put an anchor into the SQLite
@@ -1435,11 +1493,19 @@ class SQLiteRepo:
         # TODO: find a more elegant way to prevent incorrect length
         # and preface settings from reaching _slr_get_a()
         kwargs['length'] = None
-        rels = self._slr_get_a(
-            term,
+        prologue = "SELECT {}, {} FROM {}".format(
+            self.COL_CONTENT, self.COL_Q, self.TABLE_A
+        )
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            preface=False,
             with_rels=True,
             wildcards=self._has_wildcards(term),
             **kwargs
         )
-        return (r[0].split(self._char_rel)+[r[1],] for r in rels)
+        params = [x for x in chain((term,), params_q)]
+        cs = kwargs.get('cursor', self._db_conn.cursor())
+        return (
+            r[0].split(self._char_rel)+[r[1],] for r in cs.execute(sc, params)
+        )
 
