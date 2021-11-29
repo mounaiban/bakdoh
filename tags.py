@@ -901,11 +901,17 @@ class SQLiteRepo:
 
     def _slr_get_rowids(self, a, **kwargs):
         """Returns SQLite ROWIDs for anchors matching a"""
-        sc_rowid = "SELECT ROWID, {} from {} ".format(
+        prologue = "SELECT ROWID, {} from {} ".format(
             self.COL_CONTENT, self.TABLE_A
         )
-        sc = "".join((sc_rowid, self._slr_a_where_clause(),))
-        term = self._prep_a(a, wildcards=True)
+        wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
+        term = self._prep_a(a, wildcards=wildcards)
+        sc, _ = self._slr_sql_script(
+            prologue=prologue,
+            preface=True,
+            with_rels=False,
+            wildcards=wildcards
+        )
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return cs.execute(sc, (term,))
 
@@ -1418,14 +1424,19 @@ class SQLiteRepo:
           circumstances.
 
         """
-        sc_relnames = """
+        prologue = """
             SELECT DISTINCT substr({0}, 0, instr({0}, '{1}')) FROM {2}
             """.format(self.COL_CONTENT, self._char_rel, self.TABLE_A)
-        sc_where = self._slr_a_where_clause(with_rels=True)
-        sc = "".join((sc_relnames, sc_where))
         term = self._reltext(
             s, kwargs.get('a_from', CHAR_WC_ZP), kwargs.get('a_to', CHAR_WC_ZP)
         )
+        sc = self._slr_sql_script(
+            prologue,
+            preface=False,
+            with_rels=True,
+            wildcards=self._has_wildcards(term),
+            **kwargs
+        )[0]
         cs = kwargs.get('cursor', self._slr_get_shared_cursor())
         return cs.execute(sc, (term,))
 
