@@ -1303,12 +1303,7 @@ class SQLiteRepo:
         if not ck[0]:
             raise ValueError('anchor {} not found'.format(ck[1]))
         if kwargs.get('alias_format', 0x0):
-            rtxt = self.reltxt_alias_rowid(
-                name,
-                a1,
-                a2,
-                out_format=kwargs.get('alias_format')
-            )
+            rtxt = self.reltxt_alias_rowid(name, a1, a2)
         else: rtxt = self._reltext(name, a1, a2, wildcards=False)
         try:
             return self._slr_insert_into_a(rtxt, q)
