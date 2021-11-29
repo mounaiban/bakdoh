@@ -1273,13 +1273,15 @@ class SQLiteRepo:
         # TODO: Allow delete by quantity or quantity range?
         if a == CHAR_WC_ZP:
             raise ValueError("cowardly refusing to delete all anchors")
-        term = self._prep_a(a)
-        wildcards = self._has_wildcards(term)
-        if 'wildcards' not in kwargs:
-            kwargs['wildcards'] = wildcards
-        sc_delete = "DELETE FROM {} ".format(self.TABLE_A)
-        sc_where = self._slr_a_where_clause(wildcards=wildcards)
-        sc = "".join((sc_delete, sc_where))
+        wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
+        term = self._prep_a(a, wildcards=wildcards)
+        prologue = "DELETE FROM {} ".format(self.TABLE_A)
+        sc = self._slr_sql_script(
+            prologue=prologue,
+            preface=len(a) <= self.preface_length and not wildcards,
+            with_rels=False,
+            wildcards=wildcards,
+        )[0]
         cs = self._slr_get_shared_cursor()
         cs.execute(sc, (term,))
         self._db_conn.commit()
