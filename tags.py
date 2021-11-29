@@ -1340,8 +1340,20 @@ class SQLiteRepo:
         anchor. Called from DB.set_a_q()
 
         """
-        term = self._prep_a(a, **kwargs)
-        self._slr_set_q(term, q, **kwargs)
+        wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
+        term = self._prep_a(a, wildcards=wildcards)
+        prologue = "UPDATE {} SET {} = ? ".format(self.TABLE_A, self.COL_Q)
+        params = [q, term]
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            preface=len(term) <= self.preface_length,
+            with_rels=False,
+            wildcards=wildcards,
+            **kwargs
+        )
+        cs = self._slr_get_shared_cursor()
+        params.extend(params_q)
+        cs.execute(sc, params)
 
     def incr_a_q(self, a, d, **kwargs):
         """Handle DB request to increment/decrement a numerical
@@ -1408,12 +1420,18 @@ class SQLiteRepo:
 
         """
         term = self._reltext(name, a_from, a_to, **kwargs)
-        self._slr_set_q(
-            term,
-            q,
+        prologue = "UPDATE {} SET {} = ? ".format(self.TABLE_A, self.COL_Q)
+        params = [q, term]
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            preface=False,
             with_rels=True,
+            wildcards=kwargs.pop('wildcards', self._has_wildcards(term)),
             **kwargs
         )
+        cs = self._slr_get_shared_cursor()
+        params.extend(params_q)
+        cs.execute(sc, params)
 
     def incr_rel_q(self, name, a_from, a_to, d, **kwargs):
         """Handle DB request to increment/decrement the numerical
@@ -1443,14 +1461,9 @@ class SQLiteRepo:
         if a_to == CHAR_WC_ZP and a_from == CHAR_WC_ZP:
             raise ValueError("at least one of a_to or a_from must not be '*'")
         term = self._reltext(name, a_from, a_to)
-        wildcards: bool
-        if 'wildcards' not in kwargs:
-            wildcards = self._has_wildcards(term)
-            kwargs['wildcards'] = wildcards
-        else: wildcards = kwargs.get('wildcards')
-        sc_delete = "DELETE FROM {} ".format(self.TABLE_A)
-        sc_where = self._slr_a_where_clause(with_rels=True, wildcards=wildcards)
-        sc = "".join((sc_delete, sc_where))
+        wildcards = kwargs.get('wildcards', self._has_wildcards(term))
+        prologue = "DELETE FROM {} ".format(self.TABLE_A)
+        sc = self._slr_sql_script(prologue, False, True, wildcards, **kwargs)[0]
         cs = self._db_conn.cursor()
         cs.execute(sc, (term,))
         self._db_conn.commit()
@@ -1491,7 +1504,7 @@ class SQLiteRepo:
             kwargs.get('a_to', '*')
         )
         # TODO: find a more elegant way to prevent incorrect length
-        # and preface settings from reaching _slr_get_a()
+        # and preface settings from reaching _slr_sql_script()
         kwargs['length'] = None
         prologue = "SELECT {}, {} FROM {}".format(
             self.COL_CONTENT, self.COL_Q, self.TABLE_A
