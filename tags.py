@@ -1360,7 +1360,20 @@ class SQLiteRepo:
         quantity of an anchor. Called from DB.incr_a_q()
 
         """
-        self._slr_incr_q(self._prep_a(a), d, **kwargs)
+        wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
+        term = self._prep_a(a, wildcards=wildcards)
+        prologue = "UPDATE {0} SET {1} = {1}+? ".format(self.TABLE_A, self.COL_Q)
+        params = [d, term]
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            preface=len(term) <= self.preface_length,
+            with_rels=False,
+            wildcards=wildcards,
+            **kwargs
+        )
+        cs = self._slr_get_shared_cursor()
+        params.extend(params_q)
+        cs.execute(sc, params)
 
     def delete_a(self, a, **kwargs):
         """Handle DB request to delete anchors. Accepts the same arguments
@@ -1441,12 +1454,18 @@ class SQLiteRepo:
 
         """
         term = self._reltext(name, a_from, a_to, **kwargs)
-        self._slr_incr_q(
-            term,
-            d,
+        prologue = "UPDATE {0} SET {1}={1}+? ".format(self.TABLE_A, self.COL_Q)
+        params = [d, term]
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            preface=False,
             with_rels=True,
+            wildcards=kwargs.pop('wildcards', self._has_wildcards(term)),
             **kwargs
         )
+        cs = self._slr_get_shared_cursor()
+        params.extend(params_q)
+        cs.execute(sc, params)
 
     def delete_rels(self, **kwargs):
         """Handle DB request to delete relations. Accepts the same arguments
