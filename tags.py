@@ -984,7 +984,11 @@ class SQLiteRepo:
         if kwargs:
             qc, qparams = self._slr_q_clause(**kwargs)
             sc = "".join((sc, qc))
-        return (sc, qparams)
+        qlimit = ()
+        if 'limit' in kwargs:
+            qlimit = (kwargs.get("limit", 0),)
+            sc = "".join((sc, "LIMIT ?"))
+        return (sc, [x for x in chain(qparams, qlimit)])
 
     def _slr_q_clause(self, **kwargs):
         """
