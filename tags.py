@@ -1105,7 +1105,8 @@ class SQLiteRepo:
             return (clause, params)
 
     def _slr_lookup_alias(self, alias, **kwargs):
-        """Return an Anchor by an alias
+        """Return an Anchor's content or preface associated with
+        an alias
 
         Aliases are 'virtual anchors' that reference other anchors
         or relations, and are prefixed by an at "@" symbol (U+0040).
@@ -1120,20 +1121,16 @@ class SQLiteRepo:
         replaced by another incompatible feature.
 
         """
-        sc_lu: str
         if type(alias) is int:
             sc_lu = "SELECT {}, {} FROM {} WHERE ROWID = ?".format(
                 self.COL_CONTENT, self.COL_Q, self.TABLE_A
             )
+            cs = kwargs.get('cursor', self._db_conn.cursor())
+            return (
+                x[0][:self.preface_length] for x in cs.execute(sc_lu, (alias,))
+            )
         else:
-            sc_lu = """
-                SELECT {0}, {1} FROM {2} WHERE {1} LIKE ?
-                ORDER BY ROWID DESC
-                LIMIT 1
-                """.format(self.COL_CONTENT, self.COL_Q, self.TABLE_A)
-            alias = self._reltext(name=self._char_alias, a_from=alias)
-        cs = kwargs.get('cursor', self._db_conn.cursor())
-        return cs.execute(sc_lu, (alias,))
+            raise(NotImplementedError, 'alphanumeric aliases not supported')
 
     def _has_wildcards(self, a):
         return True in map(lambda x: x in a, self.CHARS_WC)
@@ -1218,14 +1215,12 @@ class SQLiteRepo:
         params_length: tuple
         prologue: str
         term: str
+        wildcards = False
         if a.startswith(self._char_alias):
-            return self._slr_lookup_alias(self._prep_a(a))
-        wildcards = kwargs.get('wildcards', self._has_wildcards(a))
-        if 'wildcards' not in kwargs:
-            wildcards = self._has_wildcards(a)
-            kwargs['wildcards'] = wildcards
-        else: wildcards = kwargs.get('wildcards')
-        term = self._prep_a(a, wildcards=wildcards)
+            term = next(self._slr_lookup_alias(self._prep_a(a)))
+        else:
+            wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
+            term = self._prep_a(a, wildcards=wildcards)
         if length is None:
             params_length = (start,)
             prologue = "SELECT substr({}, ?), {} FROM {} ".format(
@@ -1240,6 +1235,7 @@ class SQLiteRepo:
             prologue=prologue,
             preface=len(term) <= self.preface_length,
             with_rels=False,
+            wildcards=wildcards,
             **kwargs
         )
         params = [x for x in chain(params_length, (term,), params_q)]
