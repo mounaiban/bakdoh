@@ -97,10 +97,6 @@ class Anchor:
                 # if Anchor is not found
                 pass
 
-    def get_q(self):
-        """Old name for reload()"""
-        self.reload()
-
     def link(self, name, a_to, q):
         # Create a relation from this anchor.
         self._ck_db_writable()
@@ -956,41 +952,6 @@ class SQLiteRepo:
         cs.execute(sc, (item, q))
         self._db_conn.commit()
         return {'_sql_rowid': self._slr_get_last_insert_rowid()}
-
-    def _slr_a_where_clause(
-                self,
-                with_rels=False,
-                wildcards=True,
-                preface=True
-            ):
-        """
-        Returns an SQL WHERE clause for defining anchors or relations
-        on which to perform operations.
-
-        Arguments
-        =========
-        * with_rels: when True, the clause includes relations.
-
-        * wildcards: when True, the clause interprets wildcard characters
-          as wildcards; when False, wildcard characters are interpreted
-          literally
-
-        """
-        out = "WHERE "
-        if preface:
-            out = "".join((out, self._subclause_preface))
-        else:
-            out = "".join((out, "{} ".format(self.COL_CONTENT)))
-        if wildcards:
-            out = "".join((
-                out, "LIKE ? ESCAPE '{}' ".format( self.CHAR_ESCAPE)
-            ))
-        else:
-            out = "".join((out, "= ? ".format(self.COL_CONTENT)))
-        if not with_rels:
-            out = "".join((out, "AND {} NOT LIKE '%{}%' ".format(
-                        self.COL_CONTENT, self._char_rel)))
-        return out
 
     def _slr_sql_script(
                 self, prologue, preface, with_rels, wildcards, **kwargs
