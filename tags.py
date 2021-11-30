@@ -1264,6 +1264,49 @@ class SQLiteRepo:
         params.extend(params_q)
         cs.execute(sc, params)
 
+    def exists_rels(self, name='*', a_from='*', a_to='*', **kwargs):
+        """Check if one or more relations exist. Wildcards are accepted.
+        """
+        # This rather grammatically incorrect name was chosen as
+        # to stay in line with the naming style of the other methods
+        # in this class.
+        #
+        term = self._reltext(name, a_from, a_to)
+        # TODO: find a more elegant way to prevent incorrect length
+        # and preface settings from reaching _slr_sql_script()
+        kwargs['length'] = None
+        prologue = "SELECT NULL FROM {} ".format(self.TABLE_A)
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            preface=False,
+            with_rels=True,
+            wildcards=self._has_wildcards(term),
+            limit=1,
+            **kwargs
+        )
+        params = [x for x in chain((term,), params_q)]
+        cs = kwargs.get('cursor', self._db_conn.cursor())
+        try:
+            return next(cs.execute(sc, params))[0] is None
+        except StopIteration:
+            return False
+
+    def count_a(self, a, **kwargs):
+        """Count the number of Anchors matching ``a``"""
+        wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
+        term = self._prep_a(a, wildcards=wildcards)
+        params = [term,]
+        prologue = "SELECT count(*) FROM {} ".format(self.TABLE_A)
+        sc, params_q = self._slr_sql_script(
+            prologue=prologue,
+            with_rels=False,
+            wildcards=wildcards,
+            preface=(len(a) <= self.preface_length) and not wildcards
+        )
+        params.extend(params_q)
+        cs = kwargs.get('cursor', self._db_conn.cursor())
+        return next(cs.execute(sc, params))[0]
+
     def delete_a(self, a, **kwargs):
         """Handle DB request to delete anchors. Accepts the same arguments
         as DB.delete_a(). Please see the documentation of that method
