@@ -840,17 +840,9 @@ class SQLiteRepo:
         as an anchor. All anchors will be checked.
 
         """
-        sc_ck = "SELECT NULL FROM {} WHERE substr({}, 1, {}) = ?".format(
-            self.TABLE_A, self.COL_CONTENT, self.preface_length
-        )
-        cs = self._db_conn.cursor()
-        term: str
-        try:
-            for a in anchors:
-                term = a[:self.preface_length]
-                r = next(cs.execute(sc_ck, (term,)))
-        except StopIteration:
-            return (False, term)
+        for a in anchors:
+            if self.count_a(a[:self.preface_length], wildcards=False) <= 0:
+                return (False, a)
         return (True, None)
 
     def _slr_ck_tables(self):
