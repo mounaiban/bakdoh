@@ -178,58 +178,6 @@ class SLR_ReltextTests(TestCase):
             with self.subTest(a=a):
                 self.assertEqual(testrep._reltext(**a[0]), a[1])
 
-    def test_reltext_alias(self):
-        testrep = SQLiteRepo()
-        testdb = DB(testrep)
-        data = [('a', None), ('z', None)]
-        testdb.import_data(data)
-        char_rel = testrep._char_rel
-        char_alias = testrep._char_alias
-        argtests = (
-            (
-                {
-                    'name': 'Raz',
-                    'a_from': 'a',
-                    'a_to': 'z',
-                    'out_format': 1
-                },
-                'Raz{0}a{0}{1}2'.format(char_rel, char_alias)
-            ),
-            (
-                {
-                    'name': 'Raz',
-                    'a_from': 'a',
-                    'a_to': 'z',
-                    'out_format': 2
-                },
-                'Raz{0}{1}1{0}z'.format(char_rel, char_alias)
-            ),
-            (
-                {
-                    'name': 'Raz',
-                    'a_from': 'a',
-                    'a_to': 'z',
-                    'out_format': 3
-                },
-                'Raz{0}{1}1{0}{1}2'.format(char_rel, char_alias)
-            ),
-
-        ) # format: (kwargs, expected_output)
-        # NOTE: this test makes an assumption that ROWIDs are always
-        # and strictly in order of insertion of the anchors
-        #
-        for a in argtests:
-            with self.subTest(a=a):
-                self.assertEqual(testrep._reltext_alias_rowid(**a[0]), a[1])
-
-    def test_reltext_alias_not_exist(self):
-        testrep = SQLiteRepo()
-        testdb = DB(testrep)
-        data = [('a', None), ('z', None)]
-        testdb.import_data(data)
-        with self.assertRaises(ValueError):
-            testdb.repo._reltext_alias_rowid(name='Rnul', a_from='x', a_to='y')
-
 class SLR_QClauseTests(TestCase):
     """Tests for _slr_q_clause()"""
 

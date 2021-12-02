@@ -1120,53 +1120,10 @@ class SQLiteRepo:
         return '{}{}{}{}{}'.format(
             self._prep_a(name, **kwargs),
             self._char_rel,
-            self._prep_a(a_from, **kwargs),
+            self._prep_a_rel(a_from, **kwargs),
             self._char_rel,
-            self._prep_a(a_to, **kwargs),
+            self._prep_a_rel(a_to, **kwargs),
         )
-
-    def _reltext_alias_rowid(self, name, a_from, a_to, out_format=3):
-        """
-        Aliased relations are intended to be space-efficient versions of
-        relations between anchors with lengthy content
-
-        Keyword Arguments
-        =================
-        * alias - when set to 'local', local aliased relations are
-                  created instead. On SQLite repositories, anchors
-                  are referenced by a short code like @n, where n is
-                  the anchor's SQLite ROWID.
-
-        * alias_fmt - set to the following int values to create
-                      partial or fully aliased relations:
-
-                      1: use alias for a2e only
-
-                      2: use alias for a1e only
-
-                      3: use alias for both anchors
-
-                      Results for undocumented values are
-                      undefined.
-
-        """
-        n = self._prep_a(name, wildcards=False)
-        af = self._prep_a(a_from, wildcards=False)
-        at = self._prep_a(a_to, wildcards=False)
-        try:
-            if out_format & 1:
-                at = "{}{}".format(
-                    self._char_alias, next(self._slr_get_rowids(at))[0]
-                )
-            if out_format & 2:
-                af = "{}{}".format(
-                    self._char_alias, next(self._slr_get_rowids(af))[0]
-                )
-            return '{}{}{}{}{}'.format(
-                n, self._char_rel, af, self._char_rel, at
-            )
-        except StopIteration:
-            raise ValueError('at least one anchor not found')
 
     def get_a(self, a, **kwargs):
         """Handle DB request to return an iterator of anchors.
