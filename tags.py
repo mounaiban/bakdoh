@@ -813,14 +813,26 @@ class SQLiteRepo:
         else:
             if a.startswith(self._char_alias):
                 alias = a[1:]
-                if alias.isdigit():
-                    return int(alias)
+                if alias.isdigit(): return int(alias)
                 else: return a
             else:
                 i = self._index_prefix(a, self._trans_px.values())
                 out = a.translate(self.TRANS_WC)
                 out = "".join((out[:i], unescape(out[i:])))
                 return out.translate(self._trans_f)
+
+    def _prep_a_rel(self, a, **kwargs):
+        # prep_a for relations
+        if a.startswith(self._char_alias):
+            cont = next(self._get_a_by_alias(self._prep_a(a)))[0]
+            if self._char_rel in cont:
+                ex = ValueError(
+                    'relations between relations not yet supported'
+                )
+                raise(ex)
+            else: return cont
+        else:
+            return self._prep_a(a, **kwargs)
 
     def _slr_ck_anchors_exist(self, anchors):
         """
@@ -1067,9 +1079,8 @@ class SQLiteRepo:
         else:
             return (clause, params)
 
-    def _slr_lookup_alias(self, alias, **kwargs):
-        """Return an Anchor's content or preface associated with
-        an alias
+    def _get_a_by_alias(self, alias, **kwargs):
+        """Return an Anchor's preface associated with an alias
 
         Aliases are 'virtual anchors' that reference other anchors
         or relations, and are prefixed by an at "@" symbol (U+0040).
@@ -1085,15 +1096,13 @@ class SQLiteRepo:
 
         """
         if type(alias) is int:
-            sc_lu = "SELECT {}, {} FROM {} WHERE ROWID = ?".format(
-                self.COL_CONTENT, self.COL_Q, self.TABLE_A
-            )
+            sc_lu = """
+                SELECT substr({}, ?, ?), {} FROM {} WHERE ROWID = ?
+                """.format(self.COL_CONTENT, self.COL_Q, self.TABLE_A)
             cs = kwargs.get('cursor', self._db_conn.cursor())
-            return (
-                x[0][:self.preface_length] for x in cs.execute(sc_lu, (alias,))
-            )
+            return cs.execute(sc_lu, (1, self.preface_length, alias))
         else:
-            raise(NotImplementedError, 'alphanumeric aliases not supported')
+            raise(NotImplementedError('alphanumeric aliases not supported'))
 
     def _has_wildcards(self, a):
         return True in map(lambda x: x in a, self.CHARS_WC)
@@ -1178,11 +1187,10 @@ class SQLiteRepo:
         params_length: tuple
         prologue: str
         term: str
-        wildcards = False
+        wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
         if a.startswith(self._char_alias):
-            term = next(self._slr_lookup_alias(self._prep_a(a)))
+            return self._get_a_by_alias(self._prep_a(a))
         else:
-            wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
             term = self._prep_a(a, wildcards=wildcards)
         if length is None:
             params_length = (start,)
@@ -1337,9 +1345,7 @@ class SQLiteRepo:
         ck = self._slr_ck_anchors_exist((a1, a2))
         if not ck[0]:
             raise ValueError('anchor {} not found'.format(ck[1]))
-        if kwargs.get('alias_format', 0x0):
-            rtxt = self.reltxt_alias_rowid(name, a1, a2)
-        else: rtxt = self._reltext(name, a1, a2, wildcards=False)
+        rtxt = self._reltext(name, a1, a2, wildcards=False)
         try:
             return self._slr_insert_into_a(rtxt, q)
         except sqlite3.IntegrityError as x:
