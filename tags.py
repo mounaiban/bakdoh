@@ -306,6 +306,16 @@ class DB:
         """
         self.repo.delete_rels(**kwargs)
 
+    def exists_rels(self, name='*', a_from='*', a_to='*', **kwargs):
+        """
+        Return True if there is an existing relation with name matching
+        ``name`` from anchor ``a_from`` to anchor ``a_to``.
+
+        Accepts the same arguments and wildcard syntax as get_rels(),
+        please see the documentation for that method for details.
+        """
+        return self.repo.exists_rels(name, a_from, a_to, **kwargs)
+
     def export(self, a='*', relname='*', **kwargs):
         """
         Return an iterator containing anchors by content or wildcard,
@@ -1237,7 +1247,7 @@ class SQLiteRepo:
             prologue=prologue,
             preface=False,
             with_rels=True,
-            wildcards=self._has_wildcards(term),
+            wildcards=kwargs.pop('wildcards', self._has_wildcards(term)),
             limit=1,
             **kwargs
         )
