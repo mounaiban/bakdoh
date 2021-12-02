@@ -246,6 +246,130 @@ class DBGetTests(DBTests):
     usage instructions.
 
     """
+    def test_db_count_a(self):
+        test_data = {
+            'count_a_basic': {
+                'method': 'count_a',
+                'init': (
+                    ('anna', None),
+                    ('annz', 0.1),
+                    ('naan', 0.25), # yum
+                    ('nana', 0.333),
+                    ('zaaa', 0.5)
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'count_a_exact',
+                        'args': {'a': 'anna'},
+                        'out': 1
+                    },
+                    {
+                        'subtest_name': 'count_a_exact_not_found_casesen',
+                        'args': {'a': 'aNNa'},
+                        'out': 0
+                    },
+                    {
+                        'subtest_name': 'count_a_q_eq',
+                        'args': {'q_eq': 0.333},
+                        'out': 1
+                    },
+                    {
+                        'subtest_name': 'count_a_q_gte',
+                        'args': {'q_gte': 0.333},
+                        'out': 2
+                    },
+                    {
+                        'subtest_name': 'count_a_q_lte',
+                        'args': {'q_lte': 0.333},
+                        'out': 3
+                    },
+                    {
+                        'subtest_name': 'count_a_q_not',
+                        'args': {'q_lte': 0.1, 'q_not': True},
+                        'out': 3
+                    },
+                    {
+                        'subtest_name': 'count_a_q_range',
+                        'args': {'q_lte': 0.5, 'q_gte': 0.1},
+                        'out': 4
+                    },
+                    {
+                        'subtest_name': 'count_a_q_range_not',
+                        'args': {'q_lt': 0.5, 'q_gt': 0.1, 'q_not': True},
+                        'out': 2
+                    },
+                )
+            },
+        }
+        self._run_tests(test_data)
+
+    def test_db_exists_rels(self):
+        test_data = {
+            'exists_rels_basic': {
+                'method': 'exists_rels',
+                'init': (
+                    ('annz', None),
+                    ('znna', None),
+                    ('azs', 'annz', 'znna', 0.3),
+                    ('azm', 'annz', 'znna', 0.5),
+                    ('azL', 'annz', 'znna', 0.7),
+                ),
+                'args_outs': (
+                    {
+                        'subtest_name': 'exists_rels_exact',
+                        'args': {
+                            'name': 'azs', 'a_from': 'annz', 'a_to': 'znna'
+                        },
+                        'out': True
+                    },
+                    {
+                        'subtest_name': 'exists_rels_exact_no_rel',
+                        'args': {'a_from': 'znna', 'a_to': 'annz'},
+                        'out': False
+                    },
+                    {
+                        'subtest_name': 'exists_rels_exact_no_anchors',
+                        'args': {'a_from': 'h404', 'a_to': 'h403'},
+                        'out': False
+                    },
+                    {
+                        'subtest_name': 'exists_rels_exact_casesen',
+                        'args': {
+                            'name': 'Azs', 'a_from': 'annz', 'a_to': 'znna',
+                        },
+                        'out': False
+                    },
+                    {
+                        'subtest_name': 'exists_rels_q_eq',
+                        'args': {
+                            'a_from': 'annz', 'a_to': 'znna', 'q_eq': 0.3
+                        },
+                        'out': True
+                    },
+                    {
+                        'subtest_name': 'exists_rels_q_range_a',
+                        'args': {
+                            'a_from': 'annz',
+                            'a_to': 'znna',
+                            'q_lt': 0.75,
+                            'q_gt': 0.25
+                        },
+                        'out': True
+                    },
+                    {
+                        'subtest_name': 'exists_rels_q_range_b',
+                        'args': {
+                            'a_from': 'annz',
+                            'a_to': 'znna',
+                            'q_lt': 1.75,
+                            'q_gt': 1.25
+                        },
+                        'out': False
+                    },
+                ),
+            },
+        }
+        self._run_tests(test_data)
 
     def test_db_get_a(self):
         test_data = {
