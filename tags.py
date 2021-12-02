@@ -222,9 +222,17 @@ class DB:
                         'argument {} cannot be empty string'.format(a)
                     )
 
+    def count_a(self, a='*', **kwargs):
+        """
+        Count anchors matching ``a``.
+
+        Accepts the same arguments and wildcard syntax as get_rels()
+        """
+        return self.repo.count_a(a, **kwargs)
+
     def delete_a(self, a, **kwargs):
         """
-        Delete anchors matching 'a'.
+        Delete anchors matching ``a``.
 
         Accepts the same arguments and wildcard syntax as get_rels(),
         please see the documentation for that method for details.
@@ -1258,7 +1266,7 @@ class SQLiteRepo:
         except StopIteration:
             return False
 
-    def count_a(self, a, **kwargs):
+    def count_a(self, a='*', **kwargs):
         """Count the number of Anchors matching ``a``"""
         wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
         term = self._prep_a(a, wildcards=wildcards)
@@ -1268,7 +1276,8 @@ class SQLiteRepo:
             prologue=prologue,
             with_rels=False,
             wildcards=wildcards,
-            preface=(len(a) <= self.preface_length) and not wildcards
+            preface=(len(a) <= self.preface_length) and not wildcards,
+            **kwargs
         )
         params.extend(params_q)
         cs = kwargs.get('cursor', self._db_conn.cursor())
