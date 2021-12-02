@@ -1440,7 +1440,7 @@ class SQLiteRepo:
             prologue=prologue,
             preface=False,
             with_rels=True,
-            wildcards=self._has_wildcards(term),
+            wildcards=kwargs.pop('wildcards', self._has_wildcards(term)),
             **kwargs
         )
         params = [x for x in chain((term,), params_q)]
