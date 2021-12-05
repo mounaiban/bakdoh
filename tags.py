@@ -1,6 +1,15 @@
 """
 Bakdoh Totally Approachable Graph System (TAGS) Module
 
+The TAGS is a graph database system comprising shared values
+interlinked by relations with assigned quantity values (q-values).
+The aim of sharing values is to achieve a high degree of information
+normalisation.
+
+Objects are formed from building or reading these relations from a
+reference anchor; likewise, relations between objects can be formed
+from relations between reference anchors.
+
 """
 # Copyright 2021 Mounaiban
 #
@@ -149,37 +158,27 @@ class Anchor:
         )
 
 class DB:
-    """
-    Interface class to access TAGS databases.
+    """TAGS Database interface class
 
-    This class provides access to a graph database via an abstract
-    interface, allowing multiple databases of different implementations
-    and backing stores to be used together without any need for
-    awareness of implementation details for the most features.
+    This class enables access to anchors and relations in databases
+    (DBs) via a standard abstract interface, avoiding the need to
+    deal with implementation-specific details of underlying data
+    storage mechanisms, for basic day-to-day operations.
 
-    In order to access a database, wrap this class around a Repository
-    class which will access the backing store which loads and saves
-    database content to storage.
+    Data storage mechanisms are handled by repositories. DBs must
+    wrap around repositories in order to have a working database.
 
-    This class may also be used as a reference for implementing
+    This class currently doubles as a reference API for implementing
     repositories.
-
-    Notes
-    =====
-    Case sensitivity (for text scripts with case) is still not
-    finalised at this stage.
-
-    For now, operations are case-sensitive only when relation names,
-    source and destination are fully specified without wildcards.
-
     """
     num_args = ('q', 'q_eq', 'q_gt', 'q_gte', 'q_lt', 'q_lte')
     default_out_format = 0x7
 
     def __init__(self, repo, **kwargs):
-        """
-        To use, prepare a repository 'repo' beforehand, then wrap
-        a DB around it, for example:
+        """Preparing a DB:
+
+        Prepare a repository first, then specify it as "repo",
+        for example:
 
         d = DB(SQLiteRepo('example.tags.sqlite3'))
 
@@ -188,16 +187,13 @@ class DB:
         r = SQLiteRepo('example.tags.sqlite3')
         d = DB(r)
 
-        SQLiteRepository is a TAGS built-in class which loads and
-        stores TAGS databases in SQLite 3 database files.
+        NOTE: SQLiteRepository is a built-in repository which loads
+        and stores TAGS databases in SQLite 3 database files.
 
-        Keyword Arguments
-        =================
-        * allow_put_self : When set to True, this allows linked Anchors to
-          automatically request themselves to be saved to the database
-          if they are not found in the database, or when the q-value
-          is updated.
-
+        Optional Arguments
+        ==================
+        * allow_put_self : When set to True, an Anchor object linked
+          to a DB will be allowed to update or insert itself.
         """
         self.repo = repo
         self.allow_put_self = kwargs.get('allow_put_self', False)
@@ -223,117 +219,107 @@ class DB:
                     )
 
     def count_a(self, a='*', **kwargs):
-        """
-        Count anchors matching ``a``.
+        # TODO: rename "a" to "term" for this and other methods?
+        """Count anchors matching "a"
 
-        Accepts the same arguments and wildcard syntax as get_rels()
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories must implement this method
         """
         return self.repo.count_a(a, **kwargs)
 
     def delete_a(self, a, **kwargs):
-        """
-        Delete anchors matching ``a``.
+        """Delete anchors matching "a"
 
-        Accepts the same arguments and wildcard syntax as get_rels(),
-        please see the documentation for that method for details.
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
 
-        Accepted arguments: s, q_eq, (q_gt or q_gte), (q_lt or q_lte).
-        See get_a() for details on how to use the q-arguments.
+        Repositories must implement this method
 
-        Wildcards
-        =========
-        See get_a(); this method uses the same wildcard syntax.
+        Optional Arguments
+        ==================
+        * yes: When set to True, disables all delete safety
+          mechanisms.
 
-        If any name or anchor contains an asterisk or question mark,
-        use the HTML entities '&ast;' and '&quest;' instead.
+        Repositories should implement this method.
 
-        Examples
-        ========
-        * delete_a('apple') : delete the anchor 'apple'
-
-        * delete_a('app*') : delete all anchors starting with 'app'
-
-        * delete_a('ch????') : delete all six-character anchors
-          starting with 'ch'
-
-        Notes
-        =====
-        * If any name or anchor contains an asterisk, or question mark,
-          use the escape sequence &ast; and &quest; instead.
-
-        * Use wildcards with caution, as with any other delete operation
-          in any database system.
-
+        Note
+        ====
+        Delete safety mechanisms should raise ValueError when "yes"
+        is not True, and a lone zero-or-more wildcard '*' is specified
+        as "a", implying 'delete all anchors'
         """
         self.repo.delete_a(a)
 
     def delete_rels(self, **kwargs):
-        """
-        Delete relations by anchor, name or wildcard.
+        """Delete relations by anchors or names
 
-        Accepts the same arguments and wildcard syntax as get_rels(),
-        please see the documentation for that method for details.
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
 
-        Accepted arguments: a_from, a_to, name, q_eq, (q_gt or q_gte),
-        (q_lt or q_lte)
+        Repositories must implement this method
 
-        At least either a_to or a_from must be specified.
-
-        Wildcards
+        Arguments
         =========
-        See get_a(); this method uses the same wildcard syntax.
+        * a_from, a_to, name: all relations matching from "a_from" to
+          "a_to", named "name" will be deleted
 
-        If any name or anchor contains an asterisk or question mark,
-        use the HTML entities '&ast;' and '&quest;' instead.
+        Optional Arguments
+        ==================
+        * yes: When set to True, disables all delete safety
+          mechanisms.
 
-        Examples
-        ========
-        * delete_rels(a_from='apple') : delete all relations from the
-          anchor 'apple'
+        Repositories should implement this method.
 
-        * delete_rels(a_to='berry') : delete all relations to anchor 'berry'
-
-        * delete_rels(a_to='app*') :  delete all relations pointing to
-          anchors starting with 'app'
-
-        * delete_rels(a_from='apple', a_to='berry') : delete all relations
-          from the anchor 'apple' to the anchor 'berry'
-
-        * delete_rels(name='rel*', a_from='apple', a_to='blackberry')
-          Delete all relations from the anchor 'apple' to the
-          'berry' with names starting with 'rel'
-
-        Notes
-        =====
-        * If any name or anchor contains an asterisk, or question mark,
-          use the escape sequence &ast; and &quest; instead.
-
-        * Use wildcards with caution, as with any other delete operation
-          in any database system.
-
+        Note
+        ====
+        Delete safety mechanisms should raise ValueError when "yes" is
+        not True, and * "a_to", "a_from" and "name" are each set to a
+        lone zero-or-more wildcard '*', implying 'delete all
+        relations'
         """
         self.repo.delete_rels(**kwargs)
 
     def exists_rels(self, name='*', a_from='*', a_to='*', **kwargs):
-        """
-        Return True if there is an existing relation with name matching
-        ``name`` from anchor ``a_from`` to anchor ``a_to``.
+        """Check if relations exist
 
-        Accepts the same arguments and wildcard syntax as get_rels(),
-        please see the documentation for that method for details.
+        Return True if at least one matching relation exist,
+        False otherwise.
+
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories must implement this method
+
+        Arguments
+        =========
+        * a_from, a_to, name: check if there is any relation from
+          anchors matching from "a_from" to any anchor matching
+          "a_to", name matching "name"
         """
         return self.repo.exists_rels(name, a_from, a_to, **kwargs)
 
     def export(self, a='*', relname='*', **kwargs):
-        """
-        Return an iterator containing anchors by content or wildcard,
-        and associated relations in the interchange format.
+        """Export anchors and relations
 
-        See import_data() for a brief description of the format.
+        By default, return an iterator yielding anchors followed by
+        relations in the 'interchange' format. See import_data() for a
+        brief description of the format.
 
-        Set the "out_format" argument to 'json' to write a JSON
-        string ready to be exported to a file or any other stream.
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
 
+        Repositories must implement this method
+
+        Optional Arguments
+        ==================
+        * a: limit anchors export to those matching this argument
+
+        * relname: limit relation export to those matching this
+          argument
+
+        * out_format: set to 'json' to output JSON strings instead
         """
         # TODO: enable selective export by q-values
         fmt = kwargs.get('out_format', 'interchange')
@@ -356,15 +342,23 @@ class DB:
             raise ValueError('output format "{}" unsupported'.format(fmt))
 
     def get_a(self, a, **kwargs):
-        """
-        Return an iterator containing anchors by content or wildcard.
+        """Get Anchors
+
+        Return an iterator containing anchors matching "a". Anchors
+        may be filtered using optional keyword arguments.
+
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories must implement this method.
 
         Arguments
         =========
-        * a: anchor content or wildcard
+        * a: specify which anchors to match
 
-        * out_format: sets the output format; accepted values are
-          the integers 1, 3, 7 or the string "interchange":
+        Optional Arguments
+        ==================
+        * out_format: Sets the output format. Accepted values are:
 
           1: a, return anchor content only
 
@@ -372,43 +366,22 @@ class DB:
 
           7: Anchor(a,q), return content and q-value as Anchor object
 
-          "interchange": same as 3 for anchors, use for export/import
+          "interchange": currently the same as 3 for anchors; used for
+          export/import
 
           The default format is 7.
 
-        * q_eq : return only relations with a q-value equals to 'q_eq'
-
-        * q_gt : return only relations with a q-value greater than 'q_gt';
-         cannot be used with 'q_eq' or 'q_gte'
-
-        * q_gte : return only relations with a q-value greater than or equal
-          to 'q_gte'; cannot be used with 'q_eq' or 'q_gt'
-
-        * q_lt : return only relations with a q-value smaller than 'q_lt';
-         cannot be used with 'q_eq' or 'q_lte'
-
-        * q_lte : return only relations with a q-value smaller than or
-          equal to 'q_lte'; cannot be used with 'q_eq' or 'q_lt'
-
-        Wildcards
-        =========
-        The following Unix glob-like wildcards are accepted:
-
-        * asterisk (*) : zero or more characters
-
-        * question mark (?) : any one character
-
-        If any name or anchor contains an asterisk or question mark,
-        use the HTML entities '&ast;' and '&quest;' instead.
-
         Examples
         ========
-        * get_a('apple') : get the anchor 'apple'
+        * get_a('apple'): get the anchor 'apple'
 
-        * get_a('be*') : get all anchors starting with 'be'
+        * get_a('be*'): get all anchors starting with 'be'
 
-        * get_a('ch????') : get all anchors with six characters starting
-          with 'ch'
+        * get_a('ch???y'): get all anchors with six characters
+          starting with 'ch' and ending with 'y'
+
+        * get_a('date&ast;'): get the anchor that is literally
+          'date*' (with an asterisk, not wildcard)
 
         """
         def format_bare(rout):
@@ -428,25 +401,45 @@ class DB:
         return (f(r) for r in self.repo.get_a(a, **kwargs))
 
     def get_rel_names(self, s, **kwargs):
-        # Return an iterator of relation names in use between
-        # two anchors, a_from and a_to, matching s
+        """Get relation names
+
+        Return an iterator of relation names in use between
+        two anchors.
+
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories must implement this method
+
+        Arguments
+        =========
+        * a_from, a_to, name: return names between anchors matching
+          "a_from" to anchors matching "a_to", with names matching
+          "name"
+
+        Note
+        ====
+        Unlike get_rels(), only relation names are returned.
+        """
         return (r[0] for r in self.repo.get_rel_names(s, **kwargs))
 
     def get_rels(self, **kwargs):
-        """
+        """Get Relations
+
         Return an iterator containing relations by name, anchor, or
-        wildcard. Each relation is presented as a tuple of four
+        wildcard. Each relation is returned as a tuple of four
         elements:
 
         (relation_name, from_anchor, to_anchor, quantity)
 
+        Repositories must implement this method
+
         Arguments
         =========
-        * a_from : return only relations from anchors matching 'a_from'
-
-        * a_to : return only relations towards anchors matching 'a_from'
-
-        * name : return only relations matching 'name'
+        * a_from, a_to, name : All relations from anchors matching
+          "a_from" to anchors matching "a_to" with names matching
+          "name" will be selected. These relations can be further
+          filtered using optional arguments described below.
 
         * out_format: sets the output format; accepted values are
           the integers 1, 3, 7 or the string "interchange":
@@ -459,30 +452,53 @@ class DB:
           7: (name, Anchor(a,q), Anchor(a,q), q)
              return anchors as Anchor objects
 
-          "interchange": same as 1 for relations, use for export/import
+          "interchange": same as 1 for relations, use for export
+          or import
 
           The default format is 7.
 
-        * q_eq : return only relations with a q-value equals to 'q_eq'
+        Optional Arguments
+        ==================
 
-        * q_gt : return only relations with a q-value greater than 'q_gt';
-          cannot be used with 'q_eq' or 'q_gte'
+        Filter by q-values
+        ------------------
+        The following arguments filter out the relations returned.
+        These arguments also apply to some other methods that support
+        these them, like get_a() and set_a_q().
 
-        * q_gte : return only relations with a q-value greater than or equal
-          to 'q_gte'; cannot be used with 'q_eq' or 'q_gt'
+        Just replace 'relations' for 'anchors' when using these
+        arguments on anchor methods.
 
-        * q_lt : return only relations with a q-value smaller than 'q_lt';
-          cannot be used with 'q_eq' or 'q_lte'
+        * q_eq : return only relations with a q-value equals to
+          'q_eq'
+
+        * q_gt : return only relations with a q-value greater than
+          'q_gt'; cannot be used with 'q_eq' or 'q_gte'
+
+        * q_gte : return only relations with a q-value greater than
+          or equal to 'q_gte'; cannot be used with 'q_eq' or 'q_gt'
+
+        * q_lt : return only relations with a q-value smaller than
+          'q_lt'; cannot be used with 'q_eq' or 'q_lte'
 
         * q_lte : return only relations with a q-value smaller than or
           equal to 'q_lte'; cannot be used with 'q_eq' or 'q_lt'
 
+        Wildcard Override
+        -----------------
+        * wildcard : when set to False, wildcard characters will be
+          regarded as literal '*' or '?'.
+
         Wildcards
         =========
-        See get_a(); this method uses the same wildcard syntax.
+        There are currently only two wildcards:
 
-        If any name or anchor contains an asterisk or question mark,
-        use the HTML entities '&ast;' and '&quest;' instead.
+        * zero or more characters: '*' (asterisk, Unicode: U+002A)
+
+        * exactly one character: '?' (question mark, U+003F)
+
+        To enter a literal asterisk or question mark, use the HTML
+        entities '&ast;' and '&quest;' (or equivalent) instead.
 
         Examples
         ========
@@ -490,20 +506,19 @@ class DB:
 
         * get_rels(a_to='berry') : relations to anchor 'berry'
 
-        * get_rels(a_to='ap*') : relations to anchors starting with 'ap'
+        * get_rels(a_to='ap*') : relations to anchors starting
+          with 'ap'
 
         * get_rels(a_to='ch????') : relations pointing to anchors with
           six characters and starting with 'ch'
 
-        * get_rels(a_from='apple', a_to='berry') : relations from anchor
-          'apple' to anchor 'berry'
+        * get_rels(a_from='apple', a_to='berry') : relations from
+          anchor 'apple' to anchor 'berry'
 
         * get_rels(name='mashup*', a_from='apple', a_to='berry)
           relations from the anchor 'apple' to the anchor 'berry'
           with names starting with 'mashup'
-
         """
-
         fmt = kwargs.get('out_format', self.default_out_format)
         if fmt == 'interchange': fmt=0x1
         return (
@@ -517,25 +532,33 @@ class DB:
         )
 
     def get_special_chars(self):
-        """Returns a dict of characters that have some special meaning
-        to the database or repository. The characters are sorted by
-        types, addressable by the following keys:
+        """Return special characters
 
-        * "E" (escape): characters used in escape sequences in wildcards,
-          names or content
+        Returns a dict of special characters that have some special
+        meaning to the database and its repository.
 
-        * "F" (forbidden): delimiter characters that cannot be stored
-          anywhere in anchors or relation names
+        The format is as follows:
+        {
+            'E': escape_chars_str,
+            'F': forbidden_chars_str,
+            'PX': prefix_chars_str,
+            'WC': prefix_chars_wc
+        }
 
-        * "PX" (prefix): characters used for accessing special or virtual
-          anchors; these cannot be used as the first character of any
-          anchor or relation name, and must be escaped when querying
+        * escape_chars_str: string of characters used in escape
+          sequences
+
+        * forbidden_chars_str: str of delimiter chars that cannot be
+          stored anywhere in anchor content or relation names
+
+        * prefix_chars_str: characters used for accessing special or
+          virtual anchors; these cannot be used as the first character
+          in anchor content or relation names
 
         * "WC" (wildcard): characters used as wildcards, including
           '*', '?' and all internal wildcards.
 
-        The dict is mainly used for unit testing.
-
+        This information is mainly used for unit testing.
         """
         return self.repo.special_chars
 
@@ -547,19 +570,20 @@ class DB:
         }
 
     def import_data(self, data):
-        """
-        Imports anchors and relations into the database from a
-        tuple or list-based specification in the interchange format
-        as follows:
+        """Import anchors and relations
 
-        * (anchor_content, anchor_q) for Anchors
+        Import anchors and relations into the database, using
+        the following format specification:
 
-        * (rel_name, anchor_from, anchor_to, rel_q) for Relations
+        * Use an iterator of tuples or lists. Data in another format
+          should be converted to tuple or list.
+
+        * Anchor tuple format: (anchor_content, anchor_q)
+
+        * Relation tuple format:
+          (rel_name, anchor_from, anchor_to, rel_q)
           Both anchor_from and anchor_to must exist in the database
           at time of insertion.
-
-        All inputs must be wrapped in a single list or tuple, specified
-        as the "data" argument.
 
         Example: (('a1', 0), ('a2', 9001), ('r', 'a1', 'a2', None))
 
@@ -570,8 +594,27 @@ class DB:
         is under the "not_imported" key, which contains a list of
         2-tuples like: (input, error).
 
-        This method is so-called because "import" is a reserved keyword.
+        Repositories should implement this method.
 
+        Report
+        ======
+        A report dict is returned for every import. Currently, there
+        is only one item, 'not_imported', which contains a list of
+        anchors and relations that could not be imported, with the
+        following format:
+
+        (item, error)
+
+        * item: the anchor or relation that was not imported, in tuple
+          format
+
+        * error: the problem encountered preventing import, as a
+          Python exception
+
+        Note
+        ====
+        This method was so-called because the word 'import' was
+        already taken by Python
         """
         report = {
             'not_imported': [],
@@ -594,50 +637,88 @@ class DB:
         return report
 
     def incr_a_q(self, a, d, **kwargs):
-        """
-        Increment or decrement a quantity assigned to anchor 'a'
-        by d. When d<0, the quantity is decreased.
+        """Increment or decrement the q-value assigned to anchors
+        matching "a", by amount "d".
+
+        When d<0, the quantity is decreased.
 
         If no value has been assigned to the anchor, this method
         has no effect.
 
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories should implement this method
         """
         self._ck_args_isnum(d=d)
         self.repo.incr_a_q(a, d, **kwargs)
 
     def incr_rel_q(self, name, a_from, a_to, d, **kwargs):
-        """
-        Increment or decrement a quantity assigned to a relation between
-        a_from and a_to by d. When d<0, the quantity is decreased.
+        """Increment or decrement a quantity assigned to relations
+        from anchors matching "a_from" to anchors matching "a_to" by
+        "d".
+
+        When d<0, the quantity is decreased.
 
         If no value has been assigned to the relation, this method has
         no effect.
 
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories should implement this method
         """
         self._ck_args_isnum(d=d, **kwargs)
         self.repo.incr_rel_q(name, a_from, a_to, d, **kwargs)
 
     def put_a(self, a, q=None):
-        """
-        Create an anchor containing str 'a' and an optional
-        numerical quantity value 'q'.
+        """Put an Anchor into the database
 
-        Anchors of the same content can only be inserted once
-        per database.
+        Anchors are snippets of information. They may be linked
+        together with Relations to create more complex information
+        structures.
 
+        An anchor is made of two parts: its content and its quantity
+        value (q-value).
+
+        The content is a Unicode text dump, further divided into its
+        'preface' and 'body'. The preface identifies the content, and
+        is simply the first part of the content; its exact extent is
+        configured is decided by the repository and is often
+        user-configurable.
+
+        Anchors in the same database must have unique prefaces.
+
+        Arguments
+        =========
+        * a: The contents of the Anchor.
+
+        * q: the q-value of the Anchor. Both integers and decimal
+          fractions are supported
+
+        Repositories should implement this method
         """
         self._ck_args_str_not_empty(a=a)
         return self.repo.put_a(a, q)
 
     def put_rel(self, rel, a_from, a_to, q=None):
-        """
-        Create a relation between anchors 'a_from and 'a_to', with
-        an optional numerical quantity value 'q'.
+        """Create Relations
+
+        Relations are links between Anchors. When linked, Anchors
+        become shared values in an information structure capable
+        of high degrees of normalisation. Relations, like Anchors
+        may have an optional quantity value (q-value)
+
+        This method creates a single relation from anchor "a_from"
+        to anchor "a_to" of name "rel", with an optional q-value "q".
+
+        Only the preface of the anchor is used when linking.
 
         Only one relation for each combination of name, source anchor
         and destination anchor may be present in the database at
         any given time.
 
+        Repositories should implement this method
         """
         # TODO: returning information about the anchor/relation
         # from invoking put_rel() or put_a() may be helpful
@@ -652,19 +733,27 @@ class DB:
         return self.repo.put_rel(rel, a_from, a_to, q=q)
 
     def set_a_q(self, s, q, **kwargs):
-        """
-        Assign a numerical quantity q to an anchor 's'.
+        """Assign a numerical quantity (q-value) "q" to anchors
+        matching "s".
 
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories should implement this method
         """
         if q is not None:
             self._ck_args_isnum(q=q, **kwargs)
         self.repo.set_a_q(s, q, **kwargs)
 
     def set_rel_q(self, name, a_from, a_to, q, **kwargs):
-        """
-        Assign a numerical quantity q to a relation between anchors
-        a_from and a_to.
+        """Assign a numerical quantity (q-value) "q" to a relations
+        from anchors matching "a_from" to anchors matching "a_to"
+        with names matching "name"
 
+        For details on wildcard syntax, additional keyword arguments
+        and case-sensitivity, please see get_rels()
+
+        Repositories should implement this method
         """
         if q is not None:
             self._ck_args_isnum(q=q, **kwargs)
@@ -724,6 +813,10 @@ class SQLiteRepo:
           read-only access. For details, see Part 3.3 in 'Uniform
           Resource Identifiers' from the SQLite documentation
           <https://sqlite.org/uri.html>
+
+        * preface_length: Determines the number of characters from
+          the beginning of the Anchor that will be used as its preface.
+          This can only be set once, when a database file is created.
 
         Notes
         =====
