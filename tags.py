@@ -1087,23 +1087,20 @@ class SQLiteRepo:
             target = self.COL_CONTENT
         if not with_rels:
             sc = "".join((sc, "{} NOT LIKE '%{}%' AND ".format(
-                            target, self._char_rel
+                            self.COL_CONTENT, self._char_rel
                         )))
         if wildcards:
-            sc = "".join((sc, "{} LIKE ? ESCAPE '{}' ".format(
+            sc = "".join((sc, "{} LIKE :term ESCAPE '{}' ".format(
                                 target, self.CHAR_ESCAPE
                             )))
         else:
-            sc = "".join((sc, "{} = ? ".format(target)))
-        qparams = ()
+            sc = "".join((sc, "{} = :term ".format(target)))
         if kwargs:
-            qc, qparams = self._slr_q_clause(**kwargs)
-            sc = "".join((sc, qc))
-        qlimit = ()
+            qc = self._slr_q_clause(**kwargs)
+            sc = "".join((sc, qc, " "))
         if 'limit' in kwargs:
-            qlimit = (kwargs.get("limit", 0),)
-            sc = "".join((sc, "LIMIT ?"))
-        return (sc, [x for x in chain(qparams, qlimit)])
+            sc = "".join((sc, "LIMIT :limit"))
+        return sc
 
     def _slr_q_clause(self, **kwargs):
         """
@@ -1149,33 +1146,27 @@ class SQLiteRepo:
         clause = " "
         lbe = None  # lower bound or exact value
         lbe_expr = ""
-        params = []
         ub = None  # upper bound
         ub_expr = ""
         if 'q_eq' in kwargs:
             # exact
             lbe = kwargs['q_eq']
-            lbe_expr = "{} = ?".format(self.COL_Q)
-            params.append(lbe)
+            lbe_expr = "{} = :q_eq".format(self.COL_Q)
         else:
             # lower bound
             if 'q_gt' in kwargs:
                 lbe = kwargs['q_gt']
-                lbe_expr = "{} > ?".format(self.COL_Q)
-                params.append(lbe)
+                lbe_expr = "{} > :q_gt".format(self.COL_Q)
             elif 'q_gte' in kwargs:
                 lbe = kwargs['q_gte']
-                lbe_expr = "{} >= ?".format(self.COL_Q)
-                params.append(lbe)
+                lbe_expr = "{} >= :q_gte".format(self.COL_Q)
             # upper bound
             if 'q_lt' in kwargs:
                 ub = kwargs['q_lt']
-                ub_expr = "{} < ?".format(self.COL_Q)
-                params.append(ub)
+                ub_expr = "{} < :q_lt".format(self.COL_Q)
             elif 'q_lte' in kwargs:
                 ub = kwargs['q_lte']
-                ub_expr = "{} <= ?".format(self.COL_Q)
-                params.append(ub)
+                ub_expr = "{} <= :q_lte".format(self.COL_Q)
             if lbe is not None and ub is not None:
                 if lbe < ub:
                     andor = " AND "
@@ -1184,11 +1175,11 @@ class SQLiteRepo:
         if lbe is not None or ub is not None:
             clause = "{}{}{}".format(lbe_expr, andor, ub_expr)
             if kwargs.get('q_not', False):
-                return (" AND NOT ({})".format(clause), params)
+                return " AND NOT ({}) ".format(clause)
             else:
-                return ("".join((" AND ", clause)), params)
+                return "".join((" AND ", clause))
         else:
-            return (clause, params)
+            return clause
 
     def _get_a_by_alias(self, alias, **kwargs):
         """Return an Anchor's preface associated with an alias
@@ -1250,9 +1241,8 @@ class SQLiteRepo:
 
         """
         # TODO: supported kwargs: start, length, wildcards, preface
-        start = kwargs.get('start', 1)
-        length = kwargs.get('length', self.preface_length)
-        params_length: tuple
+        if 'start' not in kwargs: kwargs['start'] = 1
+        if 'length' not in kwargs: kwargs['length'] = self.preface_length
         prologue: str
         term: str
         wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
@@ -1260,24 +1250,23 @@ class SQLiteRepo:
             return self._get_a_by_alias(self._prep_a(a))
         else:
             term = self._prep_a(a, wildcards=wildcards)
-        if length is None:
-            params_length = (start,)
-            prologue = "SELECT substr({}, ?), {} FROM {} ".format(
+        if kwargs['length'] is None:
+            prologue = "SELECT substr({}, :start), {} FROM {} ".format(
                 self.COL_CONTENT, self.COL_Q, self.TABLE_A
             )
         else:
-            params_length = (start, length)
-            prologue = "SELECT substr({}, ?, ?), {} FROM {} ".format(
+            prologue = "SELECT substr({}, :start, :length), {} FROM {} ".format(
                 self.COL_CONTENT, self.COL_Q, self.TABLE_A
             )
-        sc, params_q = self._slr_sql_script(
+        sc = self._slr_sql_script(
             prologue=prologue,
             preface=len(term) <= self.preface_length,
             with_rels=False,
             wildcards=wildcards,
             **kwargs
         )
-        params = [x for x in chain(params_length, (term,), params_q)]
+        params = kwargs.copy()
+        params['term'] = term
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return ((unescape(c), q) for c, q in cs.execute(sc, params))
 
@@ -1299,17 +1288,18 @@ class SQLiteRepo:
         """
         wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
         term = self._prep_a(a, wildcards=wildcards)
-        prologue = "UPDATE {} SET {} = ? ".format(self.TABLE_A, self.COL_Q)
-        params = [q, term]
-        sc, params_q = self._slr_sql_script(
+        prologue = "UPDATE {} SET {} = :q ".format(self.TABLE_A, self.COL_Q)
+        sc = self._slr_sql_script(
             prologue=prologue,
             preface=len(term) <= self.preface_length,
             with_rels=False,
             wildcards=wildcards,
             **kwargs
         )
+        params = kwargs.copy()
+        params['term'] = term
+        params['q'] = q
         cs = self._slr_get_shared_cursor()
-        params.extend(params_q)
         cs.execute(sc, params)
 
     def incr_a_q(self, a, d, **kwargs):
@@ -1319,17 +1309,20 @@ class SQLiteRepo:
         """
         wildcards = kwargs.pop('wildcards', self._has_wildcards(a))
         term = self._prep_a(a, wildcards=wildcards)
-        prologue = "UPDATE {0} SET {1} = {1}+? ".format(self.TABLE_A, self.COL_Q)
-        params = [d, term]
-        sc, params_q = self._slr_sql_script(
+        prologue = "UPDATE {0} SET {1} = {1}+:d ".format(
+            self.TABLE_A, self.COL_Q
+        )
+        sc = self._slr_sql_script(
             prologue=prologue,
             preface=len(term) <= self.preface_length,
             with_rels=False,
             wildcards=wildcards,
             **kwargs
         )
+        params = kwargs.copy()
+        params['term'] = term
+        params['d'] = d
         cs = self._slr_get_shared_cursor()
-        params.extend(params_q)
         cs.execute(sc, params)
 
     def exists_rels(self, name='*', a_from='*', a_to='*', **kwargs):
@@ -1343,16 +1336,17 @@ class SQLiteRepo:
         # TODO: find a more elegant way to prevent incorrect length
         # and preface settings from reaching _slr_sql_script()
         kwargs['length'] = None
+        kwargs['limit'] = 1
         prologue = "SELECT NULL FROM {} ".format(self.TABLE_A)
-        sc, params_q = self._slr_sql_script(
+        sc = self._slr_sql_script(
             prologue=prologue,
             preface=False,
             with_rels=True,
             wildcards=kwargs.pop('wildcards', self._has_wildcards(term)),
-            limit=1,
             **kwargs
         )
-        params = [x for x in chain((term,), params_q)]
+        params = kwargs.copy()
+        params['term'] = term
         cs = kwargs.get('cursor', self._db_conn.cursor())
         try:
             return next(cs.execute(sc, params))[0] is None
@@ -1365,14 +1359,15 @@ class SQLiteRepo:
         term = self._prep_a(a, wildcards=wildcards)
         params = [term,]
         prologue = "SELECT count(*) FROM {} ".format(self.TABLE_A)
-        sc, params_q = self._slr_sql_script(
+        sc = self._slr_sql_script(
             prologue=prologue,
             with_rels=False,
             wildcards=wildcards,
             preface=(len(a) <= self.preface_length) and not wildcards,
             **kwargs
         )
-        params.extend(params_q)
+        params = kwargs.copy()
+        params['term'] = term
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return next(cs.execute(sc, params))[0]
 
@@ -1393,7 +1388,7 @@ class SQLiteRepo:
             preface=len(a) <= self.preface_length and not wildcards,
             with_rels=False,
             wildcards=wildcards,
-        )[0]
+        )
         cs = self._slr_get_shared_cursor()
         cs.execute(sc, (term,))
         self._db_conn.commit()
@@ -1429,9 +1424,8 @@ class SQLiteRepo:
 
         """
         term = self._reltext(name, a_from, a_to, **kwargs)
-        prologue = "UPDATE {} SET {} = ? ".format(self.TABLE_A, self.COL_Q)
-        params = [q, term]
-        sc, params_q = self._slr_sql_script(
+        prologue = "UPDATE {} SET {} = :q ".format(self.TABLE_A, self.COL_Q)
+        sc = self._slr_sql_script(
             prologue=prologue,
             preface=False,
             with_rels=True,
@@ -1439,7 +1433,9 @@ class SQLiteRepo:
             **kwargs
         )
         cs = self._slr_get_shared_cursor()
-        params.extend(params_q)
+        params = kwargs.copy()
+        params['term'] = term
+        params['q'] = q
         cs.execute(sc, params)
 
     def incr_rel_q(self, name, a_from, a_to, d, **kwargs):
@@ -1450,9 +1446,8 @@ class SQLiteRepo:
 
         """
         term = self._reltext(name, a_from, a_to, **kwargs)
-        prologue = "UPDATE {0} SET {1}={1}+? ".format(self.TABLE_A, self.COL_Q)
-        params = [d, term]
-        sc, params_q = self._slr_sql_script(
+        prologue = "UPDATE {0} SET {1}={1}+:d ".format(self.TABLE_A, self.COL_Q)
+        sc = self._slr_sql_script(
             prologue=prologue,
             preface=False,
             with_rels=True,
@@ -1460,7 +1455,9 @@ class SQLiteRepo:
             **kwargs
         )
         cs = self._slr_get_shared_cursor()
-        params.extend(params_q)
+        params = kwargs.copy()
+        params['term'] = term
+        params['d'] = d
         cs.execute(sc, params)
 
     def delete_rels(self, **kwargs):
@@ -1478,7 +1475,7 @@ class SQLiteRepo:
         term = self._reltext(name, a_from, a_to)
         wildcards = kwargs.get('wildcards', self._has_wildcards(term))
         prologue = "DELETE FROM {} ".format(self.TABLE_A)
-        sc = self._slr_sql_script(prologue, False, True, wildcards, **kwargs)[0]
+        sc = self._slr_sql_script(prologue, False, True, wildcards, **kwargs)
         cs = self._db_conn.cursor()
         cs.execute(sc, (term,))
         self._db_conn.commit()
@@ -1508,7 +1505,7 @@ class SQLiteRepo:
             with_rels=True,
             wildcards=self._has_wildcards(term),
             **kwargs
-        )[0]
+        )
         cs = kwargs.get('cursor', self._slr_get_shared_cursor())
         return cs.execute(sc, (term,))
 
@@ -1529,14 +1526,15 @@ class SQLiteRepo:
         prologue = "SELECT {}, {} FROM {}".format(
             self.COL_CONTENT, self.COL_Q, self.TABLE_A
         )
-        sc, params_q = self._slr_sql_script(
+        sc = self._slr_sql_script(
             prologue=prologue,
             preface=False,
             with_rels=True,
             wildcards=kwargs.pop('wildcards', self._has_wildcards(term)),
             **kwargs
         )
-        params = [x for x in chain((term,), params_q)]
+        params = kwargs.copy()
+        params['term'] = term
         cs = kwargs.get('cursor', self._db_conn.cursor())
         return (
             r[0].split(self._char_rel)+[r[1],] for r in cs.execute(sc, params)
