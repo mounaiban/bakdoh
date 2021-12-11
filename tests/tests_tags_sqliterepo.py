@@ -353,6 +353,25 @@ class SLRGetATests(TestCase):
             # NOTE: The the full contents cannot be used to access
             # the anchor, the preface must be used instead
 
+    def test_get_a_wildcard_long_rel_in_db(self):
+        """Get single anchor by wildcard, when long relation is in db"""
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        plen = testrepo.preface_length
+        suffix = "N" * plen
+        long_content_a = "{}{}".format("A", suffix)
+        long_content_z = "{}{}".format("Z", suffix)
+        init = (
+            (long_content_a, 0),
+            (long_content_z, 0),
+            ("R", long_content_a[:plen], long_content_z[:plen], None),
+            ("RAnch", 99)
+        )
+        expected = [("RAnch", 99),]
+        testdb.import_data(init)
+        samp = list(testdb.get_a("R*", out_format='interchange'))
+        self.assertEqual(samp, expected)
+
     def test_get_a_exact_sql_wildcard_escape(self):
         """Get single anchor containing SQL wildcard characters"""
         testdb = DB(SQLiteRepo())
@@ -560,6 +579,61 @@ class SLRPutRelsTests(TestCase):
 
 class SLRGetRelsTests(TestCase):
     """Tests for get_rels()"""
+
+    def test_get_rel_long_content(self):
+        """Get relations between anchors with long content"""
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        plen = testrepo.preface_length
+        suffix = "N" * plen
+        long_content_a = "{}{}".format("A", suffix)
+        long_content_z = "{}{}".format("Z", suffix)
+        init = (
+            (long_content_a, 0),
+            (long_content_z, 0),
+            ("R", 1),
+            ("R", long_content_a[:plen], long_content_z[:plen], None)
+        )
+        expected = [("R", long_content_a[:plen], long_content_z[:plen], None),]
+        testdb.import_data(init)
+        samp = list(testdb.get_rels(name="*", out_format='interchange'))
+        self.assertEqual(samp, expected)
+
+    def test_get_rel_long_name(self):
+        """Get relations with long names (exceeding preface length)"""
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        plen = testrepo.preface_length
+        suffix = "N" * plen
+        long_name = f"R{suffix}"
+        init = (
+            ('a', 0),
+            ('b', 1),
+            ("R", 1),
+            (long_name, 'a', 'b', 100)
+        )
+        expected = [(long_name, 'a', 'b', 100),]
+        testdb.import_data(init)
+        samp = list(testdb.get_rels(name=long_name, out_format='interchange'))
+        self.assertEqual(samp, expected)
+
+    def test_get_rel_long_name_wildcard(self):
+        """Get relations with long names by name wildcard"""
+        testrepo = SQLiteRepo()
+        testdb = DB(testrepo)
+        plen = testrepo.preface_length
+        suffix = "N" * plen
+        long_name = f"R{suffix}"
+        init = (
+            ('a', 0),
+            ('b', 1),
+            ("R", 1),
+            (long_name, 'a', 'b', 100)
+        )
+        expected = [(long_name, 'a', 'b', 100),]
+        testdb.import_data(init)
+        samp = list(testdb.get_rels(name="R*", out_format='interchange'))
+        self.assertEqual(samp, expected)
 
     def test_get_rel_special_chars_wc(self):
         """Get relations containing wildcard characters"""
